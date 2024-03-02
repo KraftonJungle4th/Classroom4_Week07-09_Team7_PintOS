@@ -56,7 +56,7 @@ void timer_init(void)
 }
 
 /* Calibrates loops_per_tick, used to implement brief delays.
-	짧은 지연을 구현하는 데 사용되는 loops_per_tick을 보정합니다. */
+   짧은 지연을 구현하는 데 사용되는 loops_per_tick을 보정합니다. */
 void timer_calibrate(void)
 {
 	unsigned high_bit, test_bit;
@@ -92,9 +92,9 @@ void timer_calibrate(void)
 int64_t
 timer_ticks(void)
 {
-	enum intr_level old_level = intr_disable();
-	int64_t t = ticks;
-	intr_set_level(old_level);
+	enum intr_level old_level = intr_disable(); // '이전 인터럽트 상태'를 인터럽트 불가로 설정?
+	int64_t t = ticks;							// OS가 부팅된 이후 타이머의 틱 수를 t에 저장
+	intr_set_level(old_level);					// 현재 인터럽트 레벨을 이전 인터럽트 상태로 설정
 	barrier();
 	return t;
 }
@@ -110,15 +110,17 @@ timer_elapsed(int64_t then)
 }
 
 /* Suspends execution for approximately TICKS timer ticks.
-   대략적으로 TICKS 타이머 틱 동안 실행을 중단합니다. 인터럽트가 켜져 있어야 합니다.
+   대략적으로 TICKS 타이머 틱 동안 실행을 중단합니다.
  */
 void timer_sleep(int64_t ticks)
 {
 	int64_t start = timer_ticks();
 
-	ASSERT(intr_get_level() == INTR_ON);
-	while (timer_elapsed(start) < ticks)
-		thread_yield();
+	ASSERT(intr_get_level() == INTR_ON); // 인터럽트가 켜져 있어야 합니다.
+	while (timer_elapsed(start) < ticks) // 만약 설정한 시간이 지나지 않았다면
+	{
+		thread_sleep();
+	}
 }
 
 /* Suspends execution for approximately MS milliseconds.
