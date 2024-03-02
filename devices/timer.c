@@ -29,6 +29,7 @@ static bool too_many_loops (unsigned loops);
 static void busy_wait (int64_t loops);
 static void real_time_sleep (int64_t num, int32_t denom);
 
+
 /* Sets up the 8254 Programmable Interval Timer (PIT) to
    interrupt PIT_FREQ times per second, and registers the
    corresponding interrupt. */
@@ -43,6 +44,7 @@ timer_init (void) {
 	outb (0x40, count >> 8);
 
 	intr_register_ext (0x20, timer_interrupt, "8254 Timer");
+
 }
 
 /* Calibrates loops_per_tick, used to implement brief delays. */
@@ -73,12 +75,12 @@ timer_calibrate (void) {
 /* Returns the number of timer ticks since the OS booted. */
 int64_t
 timer_ticks (void) {
-	enum intr_level old_level = intr_disable ();
+	enum intr_level old_level = intr_disable (); //인터럽트 비활성화 시키는 함수
 	int64_t t = ticks;
 	intr_set_level (old_level);
 	barrier ();
 	return t;
-}
+} // 시간을 반환
 
 /* Returns the number of timer ticks elapsed since THEN, which
    should be a value once returned by timer_ticks(). */
@@ -88,14 +90,29 @@ timer_elapsed (int64_t then) {
 }
 
 /* Suspends execution for approximately TICKS timer ticks. */
+// void
+// timer_sleep (int64_t ticks) {
+// 	int64_t start = timer_ticks (); // 지금 시간 가져옴
+
+// 	ASSERT (intr_get_level () == INTR_ON); //인터럽트 쓸 수 있음                       매개변수로 받아온
+// 	while (timer_elapsed (start) < ticks) // 변경되었을 현재 시간에 아까 받았던 시간 뺌 < ticks보다 작다면
+// 		thread_yield (); // 스레드 양보해라
+// 		// start는 고정이고 timer_elapsed로 받아오는 시간은 점점 커짐 ticks의 시간만큼 양보하라는 뜻
+// }
+
 void
 timer_sleep (int64_t ticks) {
 	int64_t start = timer_ticks ();
+	struct thread *t = thread_current();
 
-	ASSERT (intr_get_level () == INTR_ON);
-	while (timer_elapsed (start) < ticks)
-		thread_yield ();
+	if (thread_current()->status != THREAD_BLOCKED) {
+		printf("start sleep id %d\n", thread_current()->tid);
+		thread_current()->sleep = ticks;	
+		add_sleep_thread(thread_current());
+
+	}
 }
+
 
 /* Suspends execution for approximately MS milliseconds. */
 void
@@ -120,12 +137,16 @@ void
 timer_print_stats (void) {
 	printf ("Timer: %"PRId64" ticks\n", timer_ticks ());
 }
-
+
 /* Timer interrupt handler. */
 static void
 timer_interrupt (struct intr_frame *args UNUSED) {
 	ticks++;
 	thread_tick ();
+
+	// 여기에서 wakeup 호출
+	//printf("time intr tid: %d\n", thread_current()->tid);
+	sleep_thread_wakeup();
 }
 
 /* Returns true if LOOPS iterations waits for more than one timer
