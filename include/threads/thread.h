@@ -15,7 +15,8 @@ enum thread_status {
 	THREAD_RUNNING,     /* Running thread. */
 	THREAD_READY,       /* Not running but ready to run. */
 	THREAD_BLOCKED,     /* Waiting for an event to trigger. */
-	THREAD_DYING        /* About to be destroyed. */
+	THREAD_DYING,        /* About to be destroyed. */
+	THREAD_SLEEP
 };
 
 /* Thread identifier type.
@@ -95,6 +96,8 @@ struct thread {
 	/* Shared between thread.c and synch.c. */
 	struct list_elem elem;              /* List element. */
 
+	int64_t sleep;
+
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */
 	uint64_t *pml4;                     /* Page map level 4 */
@@ -108,6 +111,7 @@ struct thread {
 	struct intr_frame tf;               /* Information for switching */
 	unsigned magic;                     /* Detects stack overflow. */
 };
+
 
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.
@@ -142,5 +146,9 @@ int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 
 void do_iret (struct intr_frame *tf);
+
+void sleep_thread_wakeup(void);
+void add_sleep_thread(struct thread *sleep_thread);
+
 
 #endif /* threads/thread.h */
