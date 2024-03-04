@@ -43,12 +43,14 @@ static struct lock tid_lock;
 /* Thread destruction requests */
 static struct list destruction_req;
 
-static struct list sleep_req; // sleep 구조체를 담을 리스트
+static struct list sleep_req; // sleep thread를 담을 리스트
 
 /* Statistics. */
 static long long idle_ticks;   /* # of timer ticks spent idle. */
 static long long kernel_ticks; /* # of timer ticks in kernel threads. */
 static long long user_ticks;   /* # of timer ticks in user programs. */
+
+static int64_t sleep_tick;
 
 /* Scheduling. */
 #define TIME_SLICE 4		  /* # of timer ticks to give each thread. */
@@ -67,6 +69,8 @@ static void init_thread(struct thread *, const char *name, int priority);
 static void do_schedule(int status);
 static void schedule(void);
 static tid_t allocate_tid(void);
+
+static bool less(struct list_elem *a, struct list_elem *b, void *aux);
 
 /* Returns true if T appears to point to a valid thread. */
 #define is_thread(t) ((t) != NULL && (t)->magic == THREAD_MAGIC)
@@ -608,61 +612,60 @@ allocate_tid(void)
 	return tid;
 }
 
-void add_sleep_thread(struct thread *sleep_thread)
+static bool
+less(struct list_elem *a, struct list_elem *b, void *aux UNUSED)
 {
-	// enum intr_level old_level = intr_disable();
+	struct thread *th_A = list_entry(a, struct thread, elem);
+	struct thread *th_B = list_entry(b, struct thread, elem);
 
-	// if (sleep_thread->status == THREAD_SLEEP && sleep_thread->sleep > 0){
-	//	list_push_back(&sleep_req, &sleep_thread->elem);
+	if (th_A->sleep > th_B->sleep)
+		return false;
+	else
+		return true;
+}
 
-	//	schedule();
-	//}
-	if (sleep_thread->sleep > 0)
-	{ // sleep_thread->status != THREAD_BLOCKED &&
-		list_push_back(&sleep_req, &sleep_thread->elem);
-		// thread_block();
+void thread_sleep(int64_t sleep_time) // struct thread *sleep_thread)
+{
+	struct thread *sleep_thread = thread_current();
+
+	if (sleep_thread != idle_thread) // idle을 걸러주는군요...
+	{
+		enum intr_level old_level = intr_disable();
+		sleep_thread->sleep = sleep_time;
 		sleep_thread->status = THREAD_BLOCKED;
-		intr_disable();
+		list_insert_ordered(&sleep_req, &sleep_thread->elem, less, NULL);
+
+		struct thread *min_sleep = list_entry(list_front(&sleep_req), struct thread, elem);
+		sleep_tick = min_sleep->sleep;
+
 		schedule();
+		intr_set_level(old_level);
 	}
 }
 
-static int lock = 1;
-
-void sleep_thread_wakeup(void)
+void thread_wakeup(int64_t ticks)
 { // time inturrupt 마다 호출
+	if (sleep_tick == 0)
+		return;
 
-	// if (lock == 1){
-	//	lock = 0;
-	// }
-	// else if (lock == 0)
-	//	return;
-
-	while (list_size(&sleep_req) != 0)
+	while (ticks >= sleep_tick && !list_empty(&sleep_req))
 	{
-		printf("cur %d\n", list_size(&sleep_req));
-		struct thread *victim = list_entry(list_pop_front(&sleep_req), struct thread, elem);
-		printf("pop %d\n", list_size(&sleep_req));
-		if (victim->sleep > 0)
-		{
-			victim->sleep--;
-			// printf("sleep tid: %d and sleep: %d\n", victim->tid, victim->sleep);
-			list_push_back(&sleep_req, &victim->elem);
-		}
-		if (victim->sleep == 0 && victim->status == THREAD_BLOCKED)
-		{
-			printf("wakeup id: %d and state:%d\n", victim->tid, victim->status); // block 2 run 0
-			victim->status = THREAD_READY;
-			// thread_unblock(victim);
-			// list_remove(&victim->elem);
-			list_push_back(&ready_list, &victim->elem);
-		}
-		if (&victim->elem == list_end(&sleep_req))
-		{
-			printf("end\n");
-			break;
-		}
-	}
+		// printf("wake, tick:%lld  /  sleep tick: %lld\n", ticks, sleep_tick);
+		struct thread *wakeup = list_entry(list_pop_front(&sleep_req), struct thread, elem);
+		enum intr_level old_level = intr_disable();
 
-	lock = 1;
+		wakeup->status = THREAD_READY;
+		wakeup->sleep = 0; // 초기화
+
+		list_push_back(&ready_list, &wakeup->elem);
+
+		if (!list_empty(&sleep_req))
+			sleep_tick = list_entry(list_front(&sleep_req), struct thread, elem)->sleep;
+		else
+		{
+			sleep_tick = ticks;
+		}
+
+		intr_set_level(old_level);
+	}
 }
