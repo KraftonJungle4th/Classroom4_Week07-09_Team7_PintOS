@@ -157,6 +157,14 @@ bool less(const struct list_elem *a, const struct list_elem *b, void *aux)
 	return ta->wakeup_tick <= tb->wakeup_tick;
 }
 
+bool larger(const struct list_elem *a, const struct list_elem *b, void *aux)
+{
+	struct thread *ta = list_entry(a, struct thread, elem);
+	struct thread *tb = list_entry(b, struct thread, elem);
+
+	return ta->priority >= tb->priority;
+}
+
 void thread_init(void)
 {
 	ASSERT(intr_get_level() == INTR_OFF);
@@ -427,7 +435,7 @@ void thread_wakeup(int64_t ticks)
 	while (to_wakeup->wakeup_tick <= ticks)
 	{
 		list_pop_front(&sleep_list);
-		list_push_back(&ready_list, &to_wakeup->elem);
+		list_insert_ordered(&ready_list, &to_wakeup->elem, (list_less_func *)larger, NULL);
 		to_wakeup->status = THREAD_READY;
 		if (list_empty(&sleep_list))
 			return;
