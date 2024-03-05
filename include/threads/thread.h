@@ -15,8 +15,7 @@ enum thread_status
 	THREAD_RUNNING, /* Running thread. */
 	THREAD_READY,	/* Not running but ready to run. */
 	THREAD_BLOCKED, /* Waiting for an event to trigger. */
-	THREAD_DYING,	/* About to be destroyed. */
-	THREAD_SLEEP
+	THREAD_DYING	/* About to be destroyed. */
 };
 
 /* Thread identifier type.
@@ -98,6 +97,8 @@ struct thread
 	struct list_elem elem; /* List element. */
 
 	int64_t sleep;
+	int age;		 // context switching 마다 증가?
+	int64_t use_cpu; // tick? cpu 사용량
 
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */
