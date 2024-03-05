@@ -14,6 +14,9 @@
 #include "threads/synch.h"
 #include "threads/vaddr.h"
 #include "intrinsic.h"
+
+#include "devices/timer.h"
+
 #ifdef USERPROG
 #include "userprog/process.h"
 #endif
@@ -92,11 +95,10 @@ static struct thread *next_thread_to_run(void);
 static void init_thread(struct thread *, const char *name, int priority);
 static void do_schedule(int status);
 static void schedule(void);
-// static void thread_sleep(int64_t ticks);
-// static void thread_wakeup(int64_t ticks);
 
 static tid_t allocate_tid(void);
 static bool less(const struct list_elem *a, const struct list_elem *b, void *aux);
+static bool larger(const struct list_elem *a, const struct list_elem *b, void *aux);
 
 /* Returns true if T appears to point to a valid thread.
    만약 T가 유효한 쓰레드이면 true 반환*/
@@ -306,6 +308,7 @@ tid_t thread_create(const char *name, int priority,
 	 *
 	 * 스케줄되면 kernel_thread를 호출합니다.
 	 * 참고) rdi는 첫 번째 인수이고, rsi는 두 번째 인수입니다. */
+
 	t->tf.rip = (uintptr_t)kernel_thread;
 	t->tf.R.rdi = (uint64_t)function;
 	t->tf.R.rsi = (uint64_t)aux;
@@ -471,6 +474,7 @@ void thread_exit(void)
 
 	   그저 우리의 상태를 dying으로 설정하고 다른 프로세스를 스케줄합니다.
 	   schedule_tail() 호출 중에 우리는 파괴될 것입니다. */
+
 	intr_disable();
 	do_schedule(THREAD_DYING);
 	NOT_REACHED();
@@ -529,6 +533,7 @@ int thread_get_nice(void)
 int thread_get_load_avg(void)
 {
 	/* TODO: Your implementation goes here */
+	// load_avg = (59 / 60) * load_avg + (1 / 60) * ready_threads;
 	return 0;
 }
 
@@ -624,6 +629,8 @@ init_thread(struct thread *t, const char *name, int priority)
 	t->tf.rsp = (uint64_t)t + PGSIZE - sizeof(void *);
 	t->priority = priority;
 	t->magic = THREAD_MAGIC;
+
+	t->sleep = 0;
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should
@@ -709,6 +716,7 @@ thread_launch(struct thread *th)
 	 * switching 하는 main 로직입니다.
 	 * 먼저 전체 실행 컨텍스트를 intr_frame에 복원한 다음 do_iret를 호출하여 다음 스레드로 전환합니다.
 	 * 여기서 switching이 완료될 때까지는 스택을 사용해서는 안 됩니다. */
+
 	__asm __volatile(
 		/* Store registers that will be used. */
 		"push %%rax\n"
@@ -814,6 +822,7 @@ schedule(void)
 
 		   여기서는 페이지가 현재 스택에 의해 사용되고 있기 때문에 페이지 파괴 요청을 큐잉만 합니다.
 		   실제 파괴 로직은 schedule()의 시작 부분에서 호출될 것입니다. */
+
 		if (curr && curr->status == THREAD_DYING && curr != initial_thread)
 		{
 			ASSERT(curr != next);

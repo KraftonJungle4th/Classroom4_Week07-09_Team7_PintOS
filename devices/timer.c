@@ -22,9 +22,10 @@
    OS가 부팅된 이후의 타이머 틱 수입니다. */
 static int64_t ticks;
 
+static struct lock tick_lock;
+
 /* Number of loops per timer tick.
    Initialized by timer_calibrate().
-
    타이머 틱당 루프 수입니다.
    timer_calibrate()에 의해 초기화됩니다. */
 static unsigned loops_per_tick;
@@ -37,8 +38,8 @@ static void real_time_sleep(int64_t num, int32_t denom);
 /* Sets up the 8254 Programmable Interval Timer (PIT) to
    interrupt PIT_FREQ times per second, and registers the
    corresponding interrupt.
-
    PIT를 설정하여 초당 PIT_FREQ번 인터럽트를 발생시키고 해당 인터럽트를 등록합니다. */
+
 void timer_init(void)
 {
 	/* 8254 input frequency divided by TIMER_FREQ, rounded to
@@ -57,6 +58,7 @@ void timer_init(void)
 
 /* Calibrates loops_per_tick, used to implement brief delays.
    짧은 지연을 구현하는 데 사용되는 loops_per_tick을 보정합니다. */
+
 void timer_calibrate(void)
 {
 	unsigned high_bit, test_bit;
@@ -97,7 +99,7 @@ timer_ticks(void)
 	intr_set_level(old_level);					// 현재 인터럽트 레벨을 이전 인터럽트 상태로 설정
 	barrier();
 	return t;
-}
+} // 시간을 반환
 
 /* Returns the number of timer ticks elapsed since THEN, which
    should be a value once returned by timer_ticks().
@@ -109,13 +111,27 @@ timer_elapsed(int64_t then)
 	return timer_ticks() - then;
 }
 
+/* Suspends execution for approximately TICKS timer ticks. */
+// void
+// timer_sleep (int64_t ticks) {
+// 	int64_t start = timer_ticks (); // 지금 시간 가져옴
+
+// 	ASSERT (intr_get_level () == INTR_ON); //인터럽트 쓸 수 있음                       매개변수로 받아온
+// 	while (timer_elapsed (start) < ticks) // 변경되었을 현재 시간에 아까 받았던 시간 뺌 < ticks보다 작다면
+// 		thread_yield (); // 스레드 양보해라
+// 		// start는 고정이고 timer_elapsed로 받아오는 시간은 점점 커짐 ticks의 시간만큼 양보하라는 뜻
+// }
+
 /* 쓰레드를 sleep_list에 넣는 함수 */
 void timer_sleep(int64_t ticks)
 {
 	int64_t start = timer_ticks();
 
-	ASSERT(intr_get_level() == INTR_ON); // 인터럽트가 켜져 있어야 합니다.
-	thread_sleep(start + ticks);		 // 현재까지의 OS 시간 + 재우고 싶은 시간
+	if (timer_elapsed(start) < ticks)
+	{
+		ASSERT(intr_get_level() == INTR_ON); // 인터럽트가 켜져 있어야 합니다.
+	  thread_sleep(start + ticks);		 // 현재까지의 OS 시간 + 재우고 싶은 시간
+	}
 }
 
 /* Suspends execution for approximately MS milliseconds.
@@ -153,6 +169,7 @@ timer_interrupt(struct intr_frame *args UNUSED)
 {
 	ticks++;
 	thread_tick();
+
 	thread_wakeup(ticks);
 }
 
@@ -162,7 +179,7 @@ timer_interrupt(struct intr_frame *args UNUSED)
 static bool
 too_many_loops(unsigned loops)
 {
-	/* Wait for a timer tick.*/
+	/* Wait for a timer tick. */
 	int64_t start = ticks;
 	while (ticks == start)
 		barrier();
