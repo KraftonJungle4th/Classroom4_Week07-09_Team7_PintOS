@@ -48,9 +48,6 @@ static struct list ready_list;
    즉, 슬립 상태인 프로세스입니다. */
 static struct list sleep_list;
 
-/* sleep_list의 최소 tick */
-static int64_t minimum_tick;
-
 /* Idle thread.
    유휴 상태의 쓰레드*/
 static struct thread *idle_thread;
@@ -95,8 +92,11 @@ static struct thread *next_thread_to_run(void);
 static void init_thread(struct thread *, const char *name, int priority);
 static void do_schedule(int status);
 static void schedule(void);
+// static void thread_sleep(int64_t ticks);
+// static void thread_wakeup(int64_t ticks);
 
 static tid_t allocate_tid(void);
+static bool less(const struct list_elem *a, const struct list_elem *b, void *aux);
 
 /* Returns true if T appears to point to a valid thread.
    만약 T가 유효한 쓰레드이면 true 반환*/
@@ -155,6 +155,14 @@ bool less(const struct list_elem *a, const struct list_elem *b, void *aux)
 	struct thread *tb = list_entry(b, struct thread, elem);
 
 	return ta->wakeup_tick <= tb->wakeup_tick;
+}
+
+bool larger(const struct list_elem *a, const struct list_elem *b, void *aux)
+{
+	struct thread *ta = list_entry(a, struct thread, elem);
+	struct thread *tb = list_entry(b, struct thread, elem);
+
+	return ta->priority >= tb->priority;
 }
 
 void thread_init(void)
@@ -424,12 +432,17 @@ void thread_wakeup(int64_t ticks)
 	struct thread *to_wakeup = list_entry(list_front(&sleep_list), struct thread, elem);
 
 	old_level = intr_disable();
-	if (to_wakeup->wakeup_tick <= ticks)
+	while (to_wakeup->wakeup_tick <= ticks)
 	{
 		list_pop_front(&sleep_list);
-		list_push_back(&ready_list, &to_wakeup->elem);
+		list_insert_ordered(&ready_list, &to_wakeup->elem, (list_less_func *)larger, NULL);
 		to_wakeup->status = THREAD_READY;
+		if (list_empty(&sleep_list))
+			return;
+		to_wakeup = list_entry(list_front(&sleep_list), struct thread, elem);
 	}
+	// printf("%lld \n", to_wakeup->wakeup_tick);
+
 	intr_set_level(old_level);
 }
 
