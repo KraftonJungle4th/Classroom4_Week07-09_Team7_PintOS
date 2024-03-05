@@ -56,6 +56,10 @@ static int64_t sleep_tick;
 #define TIME_SLICE 4		  /* # of timer ticks to give each thread. */
 static unsigned thread_ticks; /* # of timer ticks since last yield. */
 
+static int top_priority; // 현재 가장 높은 우선순위
+static long double load_avg;
+static int recent_threads; // 실행중, 준비중인 스레드의 개수
+
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.
    Controlled by kernel command-line option "-o mlfqs". */
@@ -71,6 +75,7 @@ static void schedule(void);
 static tid_t allocate_tid(void);
 
 static bool less(struct list_elem *a, struct list_elem *b, void *aux);
+static bool lager(struct list_elem *a, struct list_elem *b, void *aux);
 
 /* Returns true if T appears to point to a valid thread. */
 #define is_thread(t) ((t) != NULL && (t)->magic == THREAD_MAGIC)
@@ -322,12 +327,16 @@ void thread_yield(void)
 /* Sets the current thread's priority to NEW_PRIORITY. */
 void thread_set_priority(int new_priority)
 {
+	// age + priority - cpu;
+	// PRI_MAX - (recent_cpu / 4) - (nice*2); 여기서 nice를 빼면?
+
 	thread_current()->priority = new_priority;
 }
 
 /* Returns the current thread's priority. */
 int thread_get_priority(void)
 {
+	// 기부 구현
 	return thread_current()->priority;
 }
 
@@ -348,6 +357,7 @@ int thread_get_nice(void)
 int thread_get_load_avg(void)
 {
 	/* TODO: Your implementation goes here */
+	// load_avg = (59 / 60) * load_avg + (1 / 60) * ready_threads;
 	return 0;
 }
 
@@ -624,6 +634,18 @@ less(struct list_elem *a, struct list_elem *b, void *aux UNUSED)
 		return true;
 }
 
+static bool
+lager(struct list_elem *a, struct list_elem *b, void *aux UNUSED)
+{
+	struct thread *th_A = list_entry(a, struct thread, elem);
+	struct thread *th_B = list_entry(b, struct thread, elem);
+
+	if (th_A->priority > th_B->priority)
+		return true;
+	else
+		return false;
+}
+
 void thread_sleep(int64_t sleep_time) // struct thread *sleep_thread)
 {
 	struct thread *sleep_thread = thread_current();
@@ -657,7 +679,8 @@ void thread_wakeup(int64_t ticks)
 		wakeup->status = THREAD_READY;
 		wakeup->sleep = 0; // 초기화
 
-		list_push_back(&ready_list, &wakeup->elem);
+		// list_push_back(&ready_list, &wakeup->elem);
+		list_insert_ordered(&ready_list, &wakeup->elem, lager, NULL);
 
 		if (!list_empty(&sleep_req))
 			sleep_tick = list_entry(list_front(&sleep_req), struct thread, elem)->sleep;
