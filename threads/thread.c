@@ -1,4 +1,6 @@
+#include "include/lib/kernel/list.h"
 #include "threads/thread.h"
+#include <stdbool.h>
 #include <debug.h>
 #include <stddef.h>
 #include <random.h>
@@ -46,6 +48,9 @@ static struct list ready_list;
    즉, 슬립 상태인 프로세스입니다. */
 static struct list sleep_list;
 
+/* sleep_list의 최소 tick */
+static int64_t minimum_tick;
+
 /* Idle thread.
    유휴 상태의 쓰레드*/
 static struct thread *idle_thread;
@@ -69,6 +74,7 @@ static long long kernel_ticks; /* # of timer ticks in kernel threads. 커널 상
 static long long user_ticks;   /* # of timer ticks in user programs. 유저 프로그램에서 보낸 타이머 틱 수*/
 
 /* Scheduling.
+
    스케쥴링*/
 #define TIME_SLICE 4		  /* # of timer ticks to give each thread. 스레드에 할당된 타이머 틱 수 */
 static unsigned thread_ticks; /* # of timer ticks since last yield. 마지막 양보 이후의 타이머 틱 수 */
@@ -89,6 +95,7 @@ static struct thread *next_thread_to_run(void);
 static void init_thread(struct thread *, const char *name, int priority);
 static void do_schedule(int status);
 static void schedule(void);
+
 static tid_t allocate_tid(void);
 
 /* Returns true if T appears to point to a valid thread.
@@ -141,6 +148,15 @@ static uint64_t gdt[3] = {0, 0x00af9a000000ffff, 0x00cf92000000ffff};
 
    이 함수가 끝날 때까지 thread_current()를 호출하는 것은 안전하지 않습니다.
    */
+
+bool less(const struct list_elem *a, const struct list_elem *b, void *aux)
+{
+	struct thread *ta = list_entry(a, struct thread, elem);
+	struct thread *tb = list_entry(b, struct thread, elem);
+
+	return ta->wakeup_tick <= tb->wakeup_tick;
+}
+
 void thread_init(void)
 {
 	ASSERT(intr_get_level() == INTR_OFF);
@@ -383,18 +399,38 @@ thread_current(void)
 	return t;
 }
 
-void thread_sleep(void)
+void thread_sleep(int64_t ticks)
 {
-	struct thread *t;
+	struct thread *curr = thread_current();
 	enum intr_level old_level;
-	t = thread_current();
 
 	old_level = intr_disable();
-	timer_interrupt();
-	list_push_back(&sleep_list, &t->elem);
-	t->status = THREAD_BLOCKED;
-	intr_set_level(old_level);
+	if (curr != idle_thread)
+	{
+		curr->status = THREAD_BLOCKED;
+		curr->wakeup_tick = ticks;
+		list_insert_ordered(&sleep_list, &curr->elem, (list_less_func *)less, NULL);
+	}
 	schedule();
+	intr_set_level(old_level);
+}
+
+void thread_wakeup(int64_t ticks)
+{
+	if (list_empty(&sleep_list))
+		return;
+
+	enum intr_level old_level;
+	struct thread *to_wakeup = list_entry(list_front(&sleep_list), struct thread, elem);
+
+	old_level = intr_disable();
+	if (to_wakeup->wakeup_tick <= ticks)
+	{
+		list_pop_front(&sleep_list);
+		list_push_back(&ready_list, &to_wakeup->elem);
+		to_wakeup->status = THREAD_READY;
+	}
+	intr_set_level(old_level);
 }
 
 /* Returns the running thread's tid.
