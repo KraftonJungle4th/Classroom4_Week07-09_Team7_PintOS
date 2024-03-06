@@ -1,0 +1,11 @@
+{
+    "files.associations": {
+        "types.h": "c",
+        "wordsize.h": "c",
+        "thread.h": "c"
+    },
+    "[c]": {
+        "editor.defaultFormatter": "ms-vscode.cpptools",
+        "editor.formatOnSave": true
+    },
+}
