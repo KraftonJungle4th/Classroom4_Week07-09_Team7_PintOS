@@ -106,6 +106,7 @@ struct thread
 
 	/* Shared between thread.c and synch.c. */
 	struct list_elem elem; /* List element. */
+	struct list_elem d_elem;
 
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */
@@ -161,5 +162,8 @@ void thread_wakeup(int64_t ticks);
 void thread_sleep(int64_t sleep_time);
 
 bool larger(const struct list_elem *a, const struct list_elem *b, void *aux);
+bool d_elem_priority(const struct list_elem *a, const struct list_elem *b, void *aux);
+
+void thread_preempt(void);
 
 #endif /* threads/thread.h */

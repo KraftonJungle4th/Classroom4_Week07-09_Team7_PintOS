@@ -32,7 +32,7 @@
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 
-void donate_priority(struct semaphore *waiters, struct thread *holder);
+void donate_priority(struct list_elem *donor, struct thread *holder);
 
 /* Initializes semaphore SEMA to VALUE.  A semaphore is a
    nonnegative integer along with two atomic operators for
@@ -81,19 +81,21 @@ void sema_down(struct semaphore *sema)
 		// list_push_back(&sema->waiters, &thread_current()->elem);
 		list_insert_ordered(&sema->waiters, &thread_current()->elem, larger, NULL);
 		if (thread_current()->wait_on_lock != NULL)
-			donate_priority(sema, thread_current()->wait_on_lock->holder);
-		thread_block();
+			donate_priority(&thread_current()->d_elem, thread_current()->wait_on_lock->holder);
+		thread_block(); // 실행 정지
 	}
 	sema->value--;
 	intr_set_level(old_level);
 }
 
-void donate_priority(struct semaphore *waiters, struct thread *holder)
+void donate_priority(struct list_elem *donor, struct thread *holder)
 {
-	struct thread *donor = list_entry(list_front(&waiters->waiters), struct thread, elem);
-	if (holder->priority < donor->priority)
+	// struct thread *donor = list_entry(list_front(&waiters->waiters), struct thread, elem);
+	list_insert_ordered(&holder->donations, donor, d_elem_priority, NULL);
+	int dona_prio = list_entry(list_front(&holder->donations), struct thread, d_elem)->priority;
+	if (holder->priority < dona_prio)
 	{
-		holder->priority = donor->original;
+		holder->priority = dona_prio;
 	}
 }
 
@@ -135,12 +137,21 @@ void sema_up(struct semaphore *sema)
 	old_level = intr_disable();
 	if (!list_empty(&sema->waiters))
 	{
-		thread_current()->priority = thread_current()->original;
-		// list_sort(&sema->waiters, larger, NULL); // add priority sort
-		thread_unblock(list_entry(list_pop_front(&sema->waiters),
-								  struct thread, elem));
+		// printf("pri:%d  ori:%d\n", thread_current()->priority, thread_current()->original);
+		struct thread *curr = thread_current();
+
+		if (!list_empty(&curr->donations))
+		{
+			curr->priority = list_entry(list_front(&curr->donations), struct thread, d_elem)->priority;
+		}
+		else
+			thread_current()->priority = thread_current()->original;
+		struct thread *popth = list_entry(list_pop_front(&sema->waiters),
+										  struct thread, elem);
+		thread_unblock(popth);
 	}
 	sema->value++;
+	thread_preempt();
 	intr_set_level(old_level);
 }
 
@@ -239,6 +250,7 @@ void lock_acquire(struct lock *lock)
 	}
 	sema_down(&lock->semaphore);
 	lock->holder = thread_current();
+	// printf("holdrer tid  %d\n", lock->holder->tid);
 	if (thread_current()->wait_on_lock != NULL)
 		thread_current()->wait_on_lock = NULL;
 }
@@ -273,9 +285,23 @@ void lock_release(struct lock *lock)
 	ASSERT(lock != NULL);
 	ASSERT(lock_held_by_current_thread(lock));
 
-	while (!list_empty(&lock->holder->donations)) // 기부자 정리
+	if (!list_empty(&lock->holder->donations))
 	{
-		list_pop_front(&lock->holder->donations);
+		struct list_elem *e = list_front(&lock->holder->donations);
+		while (e != NULL)
+		{
+			struct thread *t = list_entry(e, struct thread, d_elem);
+
+			if (t->wait_on_lock == lock)
+			{
+				list_remove(&t->d_elem);
+			}
+
+			e = e->next;
+			if (e->next == NULL)
+				break;
+		}
+		// printf("cur pri: %d    next pri: %d\n", curr->priority, next->priority);
 	}
 
 	lock->holder = NULL;
