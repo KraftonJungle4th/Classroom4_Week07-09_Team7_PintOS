@@ -51,7 +51,7 @@ static long long user_ticks;   /* 정적변수 ### of timer ticks in user progra
 
 /* Scheduling. */
 #define TIME_SLICE 4          /* 스케줄링을 위한 간격 ### of timer ticks to give each thread. */
-static unsigned thread_ticks; /* ### of timer ticks since last yield. */
+static unsigned thread_ticks; /* 마지막 양보 부터의 타이머틱스 ### of timer ticks since last yield. */
 
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.
@@ -138,7 +138,7 @@ void thread_start(void)
     /* Create the idle thread.
         idle_thread가 세마포어로 정의되어있네!
         우리가 지켜야하는 유일한 자원은 시간(ticks)이므로
-        idle이 타이머 역할을*/
+        idle이 타이머 역할을 하나..?*/
     struct semaphore idle_started;
     sema_init(&idle_started, 0);
     thread_create("idle", PRI_MIN, idle, &idle_started);
@@ -282,7 +282,9 @@ void thread_unblock(struct thread *t)
     ASSERT(t->status == THREAD_BLOCKED);
     list_push_back(&ready_list, &t->elem); // 스레드의 자료를 레디큐에 넣는다.
     t->status = THREAD_READY;              // 쓰레드를 레디상태로 만든다.
-    intr_set_level(old_level);             // 예전 사용자/OS모드로 돌아간다.
+
+    schedule();
+    intr_set_level(old_level); // 예전 사용자/OS모드로 돌아간다.
 }
 
 /* 스레드a와 b의 wakeuptick이 a가 같거나 작으면 true반환*/
@@ -507,7 +509,8 @@ idle(void *idle_started_)
     }
 }
 
-/* Function used as the basis for a kernel thread. */
+/* Function used as the basis for a kernel thread.
+    커널 스레드를 위한 기본함수 */
 static void
 kernel_thread(thread_func *function, void *aux)
 {
