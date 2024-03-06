@@ -538,7 +538,7 @@ void thread_set_priority(int new_priority)
 	// printf("new prio: %d\n", new_priority);
 	if (!list_empty(&curr->donations))
 	{
-		curr->priority = list_entry(list_front(&curr->donations), struct thread, elem)
+		curr->priority = list_entry(list_front(&curr->donations), struct thread, d_elem)
 							 ->priority;
 		// printf("don pri:%d\n", curr->priority);
 	}
