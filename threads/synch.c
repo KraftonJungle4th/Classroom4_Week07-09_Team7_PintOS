@@ -82,7 +82,7 @@ void sema_down(struct semaphore *sema)
 		list_insert_ordered(&sema->waiters, &thread_current()->elem, larger, NULL);
 		if (thread_current()->wait_on_lock != NULL)
 			donate_priority(sema, thread_current()->wait_on_lock->holder);
-		thread_block();
+		thread_block(); // 실행 정지
 	}
 	sema->value--;
 	intr_set_level(old_level);
@@ -93,7 +93,17 @@ void donate_priority(struct semaphore *waiters, struct thread *holder)
 	struct thread *donor = list_entry(list_front(&waiters->waiters), struct thread, elem);
 	if (holder->priority < donor->priority)
 	{
-		holder->priority = donor->original;
+		holder->priority = donor->priority;
+		// printf("%d\n", holder->priority);
+		struct list_elem *e = list_front(&waiters->waiters);
+		while (e != NULL)
+		{
+			struct thread *t = list_entry(e, struct thread, elem);
+			printf("tid: %d pri: %d\n", t->tid, t->priority);
+			e = e->next;
+			if (e->next == NULL)
+				break;
+		}
 	}
 }
 
@@ -135,13 +145,15 @@ void sema_up(struct semaphore *sema)
 	old_level = intr_disable();
 	if (!list_empty(&sema->waiters))
 	{
+		printf("pri:%d  ori:%d\n", thread_current()->priority, thread_current()->original);
 		thread_current()->priority = thread_current()->original;
-		// list_sort(&sema->waiters, larger, NULL); // add priority sort
-		thread_unblock(list_entry(list_pop_front(&sema->waiters),
-								  struct thread, elem));
+		struct thread *popth = list_entry(list_pop_front(&sema->waiters),
+										  struct thread, elem);
+		thread_unblock(popth);
 	}
 	sema->value++;
 	intr_set_level(old_level);
+	thread_yield();
 }
 
 static void sema_test_helper(void *sema_);
@@ -239,6 +251,7 @@ void lock_acquire(struct lock *lock)
 	}
 	sema_down(&lock->semaphore);
 	lock->holder = thread_current();
+	// printf("holdrer tid  %d\n", lock->holder->tid);
 	if (thread_current()->wait_on_lock != NULL)
 		thread_current()->wait_on_lock = NULL;
 }
@@ -273,11 +286,11 @@ void lock_release(struct lock *lock)
 	ASSERT(lock != NULL);
 	ASSERT(lock_held_by_current_thread(lock));
 
-	while (!list_empty(&lock->holder->donations)) // 기부자 정리
+	/* while (!list_empty(&lock->holder->donations)) // 기부자 정리
 	{
 		list_pop_front(&lock->holder->donations);
 	}
-
+ */
 	lock->holder = NULL;
 	sema_up(&lock->semaphore);
 }
