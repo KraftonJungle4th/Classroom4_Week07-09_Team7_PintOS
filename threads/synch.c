@@ -88,6 +88,7 @@ void sema_down(struct semaphore *sema)
 	intr_set_level(old_level);
 }
 
+// 기부자 리스트에서 가장 높은 우선순위 받아오기
 void donate_priority(struct list_elem *donor, struct thread *holder)
 {
 	// struct thread *donor = list_entry(list_front(&waiters->waiters), struct thread, elem);
