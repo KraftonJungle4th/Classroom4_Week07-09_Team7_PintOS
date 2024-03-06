@@ -92,6 +92,10 @@ struct thread
 	enum thread_status status; /* Thread state. */
 	char name[16];			   /* Name (for debugging purposes). */
 	int priority;			   /* Priority. */
+	int original;
+
+	struct lock *wait_on_lock;
+	struct list donations; // 기부해준 스레드
 
 	/* Shared between thread.c and synch.c. */
 	struct list_elem elem; /* List element. */
@@ -148,5 +152,6 @@ void do_iret(struct intr_frame *tf);
 void thread_wakeup(int64_t ticks);
 void thread_sleep(int64_t sleep_time);
 
+bool larger(const struct list_elem *a, const struct list_elem *b, void *aux);
 
 #endif /* threads/thread.h */
