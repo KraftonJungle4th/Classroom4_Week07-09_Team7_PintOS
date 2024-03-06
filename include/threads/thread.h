@@ -66,6 +66,7 @@ typedef int tid_t;
  *       the kernel stack.  Our base `struct thread' is only a
  *       few bytes in size.  It probably should stay well under 1
  *       kB.
+ *      thread구조체가 너무 커져서는 안된다.
  *
  *    2. Second, kernel stacks must not be allowed to grow too
  *       large.  If a stack overflows, it will corrupt the thread
@@ -73,18 +74,24 @@ typedef int tid_t;
  *       structures or arrays as non-static local variables.  Use
  *       dynamic allocation with malloc() or palloc_get_page()
  *       instead.
+ *      커널스택이 너무 커져서는 안된다.
  *
  * The first symptom of either of these problems will probably be
  * an assertion failure in thread_current(), which checks that
  * the `magic' member of the running thread's `struct thread' is
  * set to THREAD_MAGIC.  Stack overflow will normally change this
- * value, triggering the assertion. */
+ * value, triggering the assertion.
+ * 이 두문제의 증상은 thread_current()의 Assertion실패일겁니다.  */
 /* The `elem' member has a dual purpose.  It can be an element in
  * the run queue (thread.c), or it can be an element in a
  * semaphore wait list (synch.c).  It can be used these two ways
  * only because they are mutually exclusive: only a thread in the
  * ready state is on the run queue, whereas only a thread in the
- * blocked state is on a semaphore wait list. */
+ * blocked state is on a semaphore wait list.
+ * elem은 목적이 두갠데, 실행큐 에서의 요소일 수도 있고, 세마포어대기목록의
+ * 요소일 수도 있습니다. 두가지 방식이 상호배타적이기 때문입니다. 준비상태에
+ * 있는 스레드만이 실행큐에 있고, 차단된 상태에 있는 스레드만이 세마포어 대기목록
+ * 에 있습니다. */
 struct thread
 {
 	/* Owned by thread.c. */
@@ -92,13 +99,19 @@ struct thread
 	enum thread_status status; /* Thread state. */
 	char name[16];			   /* Name (for debugging purposes). */
 	int priority;			   /* Priority. */
+	int original;
+
+	struct lock *wait_on_lock;
+	struct list donations; // 기부해준 스레드
 
 	/* Shared between thread.c and synch.c. */
 	struct list_elem elem; /* List element. */
+	struct list_elem d_elem;
 
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */
 	uint64_t *pml4; /* Page map level 4 */
+
 #endif
 #ifdef VM
 	/* Table for whole virtual memory owned by thread. */
@@ -148,5 +161,9 @@ void do_iret(struct intr_frame *tf);
 void thread_wakeup(int64_t ticks);
 void thread_sleep(int64_t sleep_time);
 
+bool priority(const struct list_elem *a, const struct list_elem *b, void *aux);
+bool d_elem_priority(const struct list_elem *a, const struct list_elem *b, void *aux);
+
+void thread_preempt(void);
 
 #endif /* threads/thread.h */
