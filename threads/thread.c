@@ -96,7 +96,6 @@ static void schedule(void);
 
 static tid_t allocate_tid(void);
 static bool less(const struct list_elem *a, const struct list_elem *b, void *aux);
-static bool larger(const struct list_elem *a, const struct list_elem *b, void *aux);
 
 /* Returns true if T appears to point to a valid thread.
    만약 T가 유효한 쓰레드이면 true 반환*/
@@ -323,6 +322,7 @@ tid_t thread_create(const char *name, int priority,
 	thread_unblock(t);
 	struct thread *curr = running_thread();
 	int cur_priority = curr->priority;
+	printf("tid : %d  T: %d\n", curr->priority, t->priority);
 
 	if (list_entry(list_front(&ready_list), struct thread, elem)->priority > cur_priority)
 	{
@@ -376,10 +376,22 @@ void thread_unblock(struct thread *t)
 	// list_push_back(&ready_list, &t->elem);
 	list_insert_ordered(&ready_list, &t->elem, (list_less_func *)larger, NULL);
 	t->status = THREAD_READY;
-
 	intr_set_level(old_level);
 }
 
+void thread_preempt(void)
+{
+	enum intr_level old_level = intr_disable();
+	int curr_prio = thread_current()->priority;
+	if (list_empty(&ready_list))
+		return;
+
+	if (curr_prio < list_entry(list_front(&ready_list), struct thread, elem)->priority)
+	{
+		do_schedule(THREAD_READY);
+	}
+	intr_set_level(old_level);
+}
 /* Returns the name of the running thread.
    실행 중인 스레드의 이름을 반환합니다. */
 const char *thread_name(void)
@@ -513,12 +525,12 @@ void thread_set_priority(int new_priority)
 {
 	struct thread *curr = thread_current();
 	curr->original = curr->priority = new_priority;
-	printf("new prio: %d\n", new_priority);
+	// printf("new prio: %d\n", new_priority);
 	if (!list_empty(&curr->donations))
 	{
 		curr->priority = list_entry(list_front(&curr->donations), struct thread, elem)
 							 ->priority;
-		printf("don pri:%d\n", curr->priority);
+		// printf("don pri:%d\n", curr->priority);
 	}
 
 	if (list_empty(&ready_list))
@@ -663,8 +675,10 @@ init_thread(struct thread *t, const char *name, int priority)
 	strlcpy(t->name, name, sizeof t->name);
 	t->tf.rsp = (uint64_t)t + PGSIZE - sizeof(void *);
 	t->priority = priority;
+	t->original = priority;
 	// printf("init pri %d  ori %d\n", t->priority, t->original);
 	t->magic = THREAD_MAGIC;
+	list_init(&t->donations);
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should
