@@ -162,4 +162,6 @@ void thread_sleep(int64_t sleep_time);
 
 bool larger(const struct list_elem *a, const struct list_elem *b, void *aux);
 
+void thread_preempt(void);
+
 #endif /* threads/thread.h */
