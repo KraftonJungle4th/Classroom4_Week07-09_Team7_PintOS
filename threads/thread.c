@@ -160,7 +160,7 @@ bool priority(const struct list_elem *a, const struct list_elem *b, void *aux)
 	struct thread *ta = list_entry(a, struct thread, elem);
 	struct thread *tb = list_entry(b, struct thread, elem);
 
-	return ta->priority > tb->priority; // >
+	return ta->priority > tb->priority;
 }
 
 bool d_elem_priority(const struct list_elem *a, const struct list_elem *b, void *aux)
@@ -168,7 +168,7 @@ bool d_elem_priority(const struct list_elem *a, const struct list_elem *b, void 
 	struct thread *ta = list_entry(a, struct thread, d_elem);
 	struct thread *tb = list_entry(b, struct thread, d_elem);
 
-	return ta->priority > tb->priority; // >
+	return ta->priority > tb->priority;
 }
 
 void thread_init(void)
@@ -535,12 +535,10 @@ void thread_set_priority(int new_priority)
 {
 	struct thread *curr = thread_current();
 	curr->original = curr->priority = new_priority;
-	// printf("new prio: %d\n", new_priority);
 	if (!list_empty(&curr->donations))
 	{
 		curr->priority = list_entry(list_front(&curr->donations), struct thread, d_elem)
 							 ->priority;
-		// printf("don pri:%d\n", curr->priority);
 	}
 
 	if (list_empty(&ready_list))
@@ -705,10 +703,15 @@ static struct thread *
 next_thread_to_run(void)
 {
 	if (list_empty(&ready_list))
+	{
+		// printf("empty\n");
 		return idle_thread;
+	}
+
 	else
 	{
 		// list_sort(&ready_list, priority, NULL);
+		// printf("pri:   %d\n", list_entry(list_begin(&ready_list), struct thread, elem)->priority);
 		return list_entry(list_pop_front(&ready_list), struct thread, elem);
 	}
 }
