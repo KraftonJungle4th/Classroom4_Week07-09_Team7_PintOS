@@ -12,11 +12,10 @@
 /* States in a thread's life cycle. */
 enum thread_status
 {
-    THREAD_RUNNING, /* Running thread. */
-    THREAD_READY,   /* Not running but ready to run. */
-    THREAD_BLOCKED, /* Waiting for an event to trigger. */
-    THREAD_DYING,   /* About to be destroyed. */
-    THREAD_STUNNED
+	THREAD_RUNNING, /* Running thread. */
+	THREAD_READY,	/* Not running but ready to run. */
+	THREAD_BLOCKED, /* Waiting for an event to trigger. */
+	THREAD_DYING,	/* About to be destroyed. */
 };
 
 /* Thread identifier type.
@@ -100,7 +99,6 @@ struct thread
     enum thread_status status; /* Thread state. */
     char name[16];             /* Name (for debugging purposes). */
     int priority;              /* Priority. */
-    int64_t wakeup_tick;       /* tick till wake up during stun */
 
     /* Shared between thread.c and synch.c. */
     struct list_elem elem; /* List element. */
@@ -108,15 +106,17 @@ struct thread
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint64_t *pml4; /* Page map level 4 */
+
 #endif
 #ifdef VM
     /* Table for whole virtual memory owned by thread. */
     struct supplemental_page_table spt;
 #endif
 
-    /* Owned by thread.c. */
-    struct intr_frame tf; /* Information for switching */
-    unsigned magic;       /* Detects stack overflow. */
+	/* Owned by thread.c. */
+	struct intr_frame tf; /* Information for switching */
+	unsigned magic;		  /* Detects stack overflow. */
+	int64_t wakeup_tick;  /* 쓰레드가 wake-up할 tick(local tick)*/
 };
 
 /* If false (default), use round-robin scheduler.
@@ -135,9 +135,6 @@ tid_t thread_create(const char *name, int priority, thread_func *, void *);
 
 void thread_block(void);
 void thread_unblock(struct thread *);
-void thread_stun(int64_t);
-void thread_wakeup(struct thread *);
-void timer_check_wakeup(int64_t);
 
 struct thread *thread_current(void);
 tid_t thread_tid(void);
@@ -155,5 +152,8 @@ int thread_get_recent_cpu(void);
 int thread_get_load_avg(void);
 
 void do_iret(struct intr_frame *tf);
+
+void thread_wakeup(int64_t ticks);
+void thread_sleep(int64_t sleep_time);
 
 #endif /* threads/thread.h */
