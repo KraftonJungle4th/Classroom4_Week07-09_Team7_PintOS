@@ -79,7 +79,7 @@ void sema_down(struct semaphore *sema)
 	while (sema->value == 0)
 	{
 		// list_push_back(&sema->waiters, &thread_current()->elem);
-		list_insert_ordered(&sema->waiters, &thread_current()->elem, larger, NULL);
+		list_insert_ordered(&sema->waiters, &thread_current()->elem, priority, NULL);
 		if (thread_current()->wait_on_lock != NULL)
 			donate_priority(&thread_current()->d_elem, thread_current()->wait_on_lock->holder);
 		thread_block(); // 실행 정지
@@ -370,7 +370,7 @@ void cond_wait(struct condition *cond, struct lock *lock)
 
 	sema_init(&waiter.semaphore, 0);
 	list_push_back(&cond->waiters, &waiter.elem);
-	// list_insert_ordered(&cond->waiters, &waiter.elem, larger, NULL);
+	// list_insert_ordered(&cond->waiters, &waiter.elem, priority, NULL);
 	lock_release(lock);
 	sema_down(&waiter.semaphore);
 	lock_acquire(lock);
