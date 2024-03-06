@@ -514,13 +514,14 @@ void thread_yield(void)
    현재 스레드의 우선순위를 NEW_PRIORITY로 설정합니다. */
 void thread_set_priority(int new_priority)
 {
-	thread_current()->original = thread_current()->priority = new_priority;
+	struct thread *curr = thread_current();
+	curr->original = curr->priority = new_priority;
 	printf("new prio: %d\n", new_priority);
-	if (!list_empty(&thread_current()->donations))
+	if (!list_empty(&curr->donations))
 	{
-		thread_current()->priority = list_entry(list_front(&thread_current()->donations), struct thread, elem)
-										 ->priority;
-		printf("don pri:%d\n", thread_current()->priority);
+		curr->priority = list_entry(list_front(&curr->donations), struct thread, elem)
+							 ->priority;
+		printf("don pri:%d\n", curr->priority);
 	}
 
 	if (list_empty(&ready_list))
@@ -531,7 +532,7 @@ void thread_set_priority(int new_priority)
 	struct thread *top_pri_th = list_entry(list_front(&ready_list), struct thread, elem);
 	int top_priority = top_pri_th->priority;
 
-	if (top_priority > thread_current()->priority)
+	if (top_priority > curr->priority)
 	{
 		thread_yield();
 	}
