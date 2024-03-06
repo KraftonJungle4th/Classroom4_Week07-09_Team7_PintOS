@@ -164,6 +164,14 @@ bool larger(const struct list_elem *a, const struct list_elem *b, void *aux)
 	return ta->priority > tb->priority; // >
 }
 
+bool d_elem_priority(const struct list_elem *a, const struct list_elem *b, void *aux)
+{
+	struct thread *ta = list_entry(a, struct thread, d_elem);
+	struct thread *tb = list_entry(b, struct thread, d_elem);
+
+	return ta->priority > tb->priority; // >
+}
+
 void thread_init(void)
 {
 	ASSERT(intr_get_level() == INTR_OFF);
@@ -322,9 +330,9 @@ tid_t thread_create(const char *name, int priority,
 	thread_unblock(t);
 	struct thread *curr = running_thread();
 	int cur_priority = curr->priority;
-	printf("tid : %d  T: %d\n", curr->priority, t->priority);
+	// printf("tid : %d  T: %d\n", curr->priority, t->priority);
 
-	if (list_entry(list_front(&ready_list), struct thread, elem)->priority > cur_priority)
+	if (!list_empty(&ready_list) && list_entry(list_front(&ready_list), struct thread, elem)->priority > cur_priority)
 	{
 		thread_yield();
 	}
@@ -381,16 +389,18 @@ void thread_unblock(struct thread *t)
 
 void thread_preempt(void)
 {
-	enum intr_level old_level = intr_disable();
 	int curr_prio = thread_current()->priority;
 	if (list_empty(&ready_list))
 		return;
 
-	if (curr_prio < list_entry(list_front(&ready_list), struct thread, elem)->priority)
+	/* 	if (curr_prio < list_entry(list_front(&ready_list), struct thread, elem)->priority)
+		{
+			do_schedule(THREAD_READY);
+		} */
+	if (list_entry(list_front(&ready_list), struct thread, elem)->priority > curr_prio)
 	{
-		do_schedule(THREAD_READY);
+		thread_yield();
 	}
-	intr_set_level(old_level);
 }
 /* Returns the name of the running thread.
    실행 중인 스레드의 이름을 반환합니다. */
@@ -697,7 +707,10 @@ next_thread_to_run(void)
 	if (list_empty(&ready_list))
 		return idle_thread;
 	else
+	{
+		// list_sort(&ready_list, larger, NULL);
 		return list_entry(list_pop_front(&ready_list), struct thread, elem);
+	}
 }
 
 /* Use iretq to launch the thread
@@ -873,6 +886,24 @@ schedule(void)
 		 * of current running. */
 		thread_launch(next);
 	}
+	/* if (!list_empty(&ready_list))
+	{
+		struct list_elem *e = list_front(&ready_list);
+		while (e != NULL)
+		{
+			struct thread *t = list_entry(e, struct thread, elem);
+			printf("cur pri: %d    next pri: %d\n", curr->priority, next->priority);
+			printf("tid: %d pri: %d\n", t->tid, t->priority);
+			e = e->next;
+			if (e->next == NULL)
+				break;
+		}
+		// printf("cur pri: %d    next pri: %d\n", curr->priority, next->priority);
+	}
+	else
+	{
+		printf("ready list empty curr pri: %d\n", curr->priority);
+	} */
 }
 
 /* Returns a tid to use for a new thread.
