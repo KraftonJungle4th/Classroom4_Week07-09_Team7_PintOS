@@ -163,7 +163,7 @@ bool priority(const struct list_elem *a, const struct list_elem *b, void *aux)
 	struct thread *ta = list_entry(a, struct thread, elem);
 	struct thread *tb = list_entry(b, struct thread, elem);
 
-	return ta->priority >= tb->priority;
+	return ta->priority > tb->priority;
 };
 
 void thread_init(void)
@@ -322,10 +322,12 @@ tid_t thread_create(const char *name, int priority,
 
 	thread_unblock(t);
 
+	old_level = intr_disable();
 	if (thread_get_priority() < t->priority)
 	{
 		thread_yield();
 	}
+	intr_set_level(old_level);
 	return tid;
 }
 
@@ -373,7 +375,24 @@ void thread_unblock(struct thread *t)
 	ASSERT(is_thread(t));
 	old_level = intr_disable();
 	ASSERT(t->status == THREAD_BLOCKED);
-	list_insert_ordered(&ready_list, &t->elem, (list_less_func *)priority, NULL);
+	if (t != idle_thread)
+	{
+		if (list_empty(&ready_list))
+		{
+			list_push_back(&ready_list, &t->elem);
+		}
+		else
+		{
+			if (priority(&t->elem, list_front(&ready_list), NULL))
+			{
+				list_push_front(&ready_list, &t->elem);
+			}
+			else
+			{
+				list_insert_ordered(&ready_list, &t->elem, (list_less_func *)priority, NULL);
+			}
+		}
+	}
 	t->status = THREAD_READY;
 	intr_set_level(old_level);
 }
@@ -505,9 +524,8 @@ void thread_yield(void)
 void thread_set_priority(int new_priority)
 {
 	enum intr_level old_level;
-	thread_current()->priority = new_priority;
-
 	old_level = intr_disable();
+	thread_current()->priority = new_priority;
 	if (!list_empty(&ready_list))
 	{
 		struct thread *front = list_entry(list_front(&ready_list), struct thread, elem);
