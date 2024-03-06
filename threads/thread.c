@@ -511,7 +511,6 @@ void thread_yield(void)
    현재 스레드의 우선순위를 NEW_PRIORITY로 설정합니다. */
 void thread_set_priority(int new_priority)
 {
-<<<<<<< HEAD
 	struct thread *curr = thread_current();
 	curr->original = curr->priority = new_priority;
 	printf("new prio: %d\n", new_priority);
@@ -534,9 +533,6 @@ void thread_set_priority(int new_priority)
 	{
 		thread_yield();
 	}
-=======
-	thread_current()->priority = new_priority;
->>>>>>> 648bb533ba93395cdd21a02bf85b3f6007c58f9a
 }
 
 /* Returns the current thread's priority.
