@@ -455,6 +455,21 @@ void list_insert_ordered(struct list *list, struct list_elem *elem,
 	return list_insert(e, elem);
 }
 
+// /* No less and No aux */
+// void list_insert_tick_ordered(struct list *list, struct list_elem *elem)
+// {
+//     struct list_elem *e;
+//     struct thread *curr_th_ptr = list_entry(elem, struct thread, elem);
+
+//     ASSERT(list != NULL);
+//     ASSERT(elem != NULL);
+
+//     for (e = list_begin(list); e != list_end(list); e = list_next(e))
+//         if (e->wakeup_tick > tk)
+//             break;
+//     return list_insert(e, elem);
+// }
+
 /* Iterates through LIST and removes all but the first in each
    set of adjacent elements that are equal according to LESS
    given auxiliary data AUX.  If DUPLICATES is non-null, then the
