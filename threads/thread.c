@@ -1,4 +1,3 @@
-#include "include/lib/kernel/list.h"
 #include "threads/thread.h"
 #include <stdbool.h>
 #include <debug.h>
@@ -98,7 +97,7 @@ static void schedule(void);
 
 static tid_t allocate_tid(void);
 static bool less(const struct list_elem *a, const struct list_elem *b, void *aux);
-static bool larger(const struct list_elem *a, const struct list_elem *b, void *aux);
+static bool priority(const struct list_elem *a, const struct list_elem *b, void *aux);
 
 /* Returns true if T appears to point to a valid thread.
    만약 T가 유효한 쓰레드이면 true 반환*/
@@ -159,13 +158,13 @@ bool less(const struct list_elem *a, const struct list_elem *b, void *aux)
 	return ta->wakeup_tick <= tb->wakeup_tick;
 }
 
-bool larger(const struct list_elem *a, const struct list_elem *b, void *aux)
+bool priority(const struct list_elem *a, const struct list_elem *b, void *aux)
 {
 	struct thread *ta = list_entry(a, struct thread, elem);
 	struct thread *tb = list_entry(b, struct thread, elem);
 
 	return ta->priority >= tb->priority;
-}
+};
 
 void thread_init(void)
 {
@@ -289,6 +288,7 @@ tid_t thread_create(const char *name, int priority,
 {
 	struct thread *t;
 	tid_t tid;
+	enum intr_level old_level;
 
 	ASSERT(function != NULL);
 
@@ -302,7 +302,6 @@ tid_t thread_create(const char *name, int priority,
 	   쓰레드 초기화 */
 	init_thread(t, name, priority);
 	tid = t->tid = allocate_tid();
-
 	/* Call the kernel_thread if it scheduled.
 	 * Note) rdi is 1st argument, and rsi is 2nd argument.
 	 *
@@ -320,8 +319,13 @@ tid_t thread_create(const char *name, int priority,
 
 	/* Add to run queue.
 	   실행 큐에 추가 */
+
 	thread_unblock(t);
 
+	if (thread_get_priority() < t->priority)
+	{
+		thread_yield();
+	}
 	return tid;
 }
 
@@ -367,10 +371,9 @@ void thread_unblock(struct thread *t)
 	enum intr_level old_level;
 
 	ASSERT(is_thread(t));
-
 	old_level = intr_disable();
 	ASSERT(t->status == THREAD_BLOCKED);
-	list_push_back(&ready_list, &t->elem);
+	list_insert_ordered(&ready_list, &t->elem, (list_less_func *)priority, NULL);
 	t->status = THREAD_READY;
 	intr_set_level(old_level);
 }
@@ -438,14 +441,12 @@ void thread_wakeup(int64_t ticks)
 	while (to_wakeup->wakeup_tick <= ticks)
 	{
 		list_pop_front(&sleep_list);
-		list_insert_ordered(&ready_list, &to_wakeup->elem, (list_less_func *)larger, NULL);
+		list_insert_ordered(&ready_list, &to_wakeup->elem, (list_less_func *)priority, NULL);
 		to_wakeup->status = THREAD_READY;
 		if (list_empty(&sleep_list))
 			return;
 		to_wakeup = list_entry(list_front(&sleep_list), struct thread, elem);
 	}
-	// printf("%lld \n", to_wakeup->wakeup_tick);
-
 	intr_set_level(old_level);
 }
 
@@ -487,14 +488,14 @@ void thread_exit(void)
    스케줄러의 변덕에 따라 즉시 다시 예약될 수 있습니다.*/
 void thread_yield(void)
 {
-	struct thread *curr = thread_current();
+	struct thread *curr = thread_current(); // 현재 실행중인 스레드
 	enum intr_level old_level;
 
 	ASSERT(!intr_context());
 
 	old_level = intr_disable();
 	if (curr != idle_thread)
-		list_push_back(&ready_list, &curr->elem);
+		list_insert_ordered(&ready_list, &curr->elem, (list_less_func *)priority, NULL);
 	do_schedule(THREAD_READY);
 	intr_set_level(old_level);
 }
@@ -503,7 +504,19 @@ void thread_yield(void)
    현재 스레드의 우선순위를 NEW_PRIORITY로 설정합니다. */
 void thread_set_priority(int new_priority)
 {
+	enum intr_level old_level;
 	thread_current()->priority = new_priority;
+
+	old_level = intr_disable();
+	if (!list_empty(&ready_list))
+	{
+		struct thread *front = list_entry(list_front(&ready_list), struct thread, elem);
+		if (front->priority > new_priority)
+		{
+			thread_yield();
+		}
+	}
+	intr_set_level(old_level);
 }
 
 /* Returns the current thread's priority.
