@@ -96,7 +96,7 @@ static void schedule(void);
 
 static tid_t allocate_tid(void);
 static bool less(const struct list_elem *a, const struct list_elem *b, void *aux);
-// static bool larger(const struct list_elem *a, const struct list_elem *b, void *aux);
+static bool larger(const struct list_elem *a, const struct list_elem *b, void *aux);
 
 /* Returns true if T appears to point to a valid thread.
    만약 T가 유효한 쓰레드이면 true 반환*/
@@ -511,7 +511,28 @@ void thread_yield(void)
    현재 스레드의 우선순위를 NEW_PRIORITY로 설정합니다. */
 void thread_set_priority(int new_priority)
 {
-	thread_current()->priority = new_priority;
+	struct thread *curr = thread_current();
+	curr->original = curr->priority = new_priority;
+	printf("new prio: %d\n", new_priority);
+	if (!list_empty(&curr->donations))
+	{
+		curr->priority = list_entry(list_front(&curr->donations), struct thread, elem)
+							 ->priority;
+		printf("don pri:%d\n", curr->priority);
+	}
+
+	if (list_empty(&ready_list))
+		return;
+
+	list_sort(&ready_list, larger, NULL);
+
+	struct thread *top_pri_th = list_entry(list_front(&ready_list), struct thread, elem);
+	int top_priority = top_pri_th->priority;
+
+	if (top_priority > curr->priority)
+	{
+		thread_yield();
+	}
 }
 
 /* Returns the current thread's priority.

@@ -78,11 +78,23 @@ void sema_down(struct semaphore *sema)
 	old_level = intr_disable();
 	while (sema->value == 0)
 	{
-		list_push_back(&sema->waiters, &thread_current()->elem);
+		// list_push_back(&sema->waiters, &thread_current()->elem);
+		list_insert_ordered(&sema->waiters, &thread_current()->elem, larger, NULL);
+		if (thread_current()->wait_on_lock != NULL)
+			donate_priority(sema, thread_current()->wait_on_lock->holder);
 		thread_block();
 	}
 	sema->value--;
 	intr_set_level(old_level);
+}
+
+void donate_priority(struct semaphore *waiters, struct thread *holder)
+{
+	struct thread *donor = list_entry(list_front(&waiters->waiters), struct thread, elem);
+	if (holder->priority < donor->priority)
+	{
+		holder->priority = donor->original;
+	}
 }
 
 /* Down or "P" operation on a semaphore, but only if the
@@ -122,8 +134,12 @@ void sema_up(struct semaphore *sema)
 
 	old_level = intr_disable();
 	if (!list_empty(&sema->waiters))
+	{
+		thread_current()->priority = thread_current()->original;
+		// list_sort(&sema->waiters, larger, NULL); // add priority sort
 		thread_unblock(list_entry(list_pop_front(&sema->waiters),
 								  struct thread, elem));
+	}
 	sema->value++;
 	intr_set_level(old_level);
 }
@@ -168,7 +184,7 @@ sema_test_helper(void *sema_)
    thread at any given time.  Our locks are not "recursive", that
    is, it is an error for the thread currently holding a lock to
    try to acquire that lock.
-	LOCK을 초기화합니다. 한 번에 최대 한 개의 스레드만이 잠금을 보유할 수 있습니다.
+LOCK을 초기화합니다. 한 번에 최대 한 개의 스레드만이 잠금을 보유할 수 있습니다.
 	우리의 잠금은 "재귀적"이지 않습니다. 즉, 현재 잠금을 보유하고 있는 스레드가
 	그 잠금을 다시 획득하려고 시도하는 것은 오류입니다.
 
@@ -200,7 +216,7 @@ void lock_init(struct lock *lock)
 /* Acquires LOCK, sleeping until it becomes available if
    necessary.  The lock must not already be held by the current
    thread.
-   잠금키를 얻습니다. 획득이 당장 안되면 사용 가능할 때 까지 잠듭니다.
+잠금키를 얻습니다. 획득이 당장 안되면 사용 가능할 때 까지 잠듭니다.
 	이 잠금키는 현재쓰레드가 이미보유하고 있지 않아야 합니다. (이잠금키를 현재의쓰레드가
 	보유하는 상황이 벌어져서는 안됩니다.)
    This function may sleep, so it must not be called within an
@@ -213,14 +229,18 @@ void lock_init(struct lock *lock)
    */
 void lock_acquire(struct lock *lock)
 {
-	ASSERT(lock != NULL);	 // lock주소가 null이 아니어야 함
-	ASSERT(!intr_context()); // 외부인터럽트(타이머인터럽트)가 아니어야함.
-	// 자원접근은 쓰레드들이 하는것이므로, 인터럽트 핸들러는 여기 오는거 아니다.
+	ASSERT(lock != NULL);
+	ASSERT(!intr_context());
 	ASSERT(!lock_held_by_current_thread(lock));
-	//
 
+	if (lock->holder != NULL)
+	{
+		thread_current()->wait_on_lock = lock;
+	}
 	sema_down(&lock->semaphore);
 	lock->holder = thread_current();
+	if (thread_current()->wait_on_lock != NULL)
+		thread_current()->wait_on_lock = NULL;
 }
 
 /* Tries to acquires LOCK and returns true if successful or false
@@ -253,6 +273,11 @@ void lock_release(struct lock *lock)
 	ASSERT(lock != NULL);
 	ASSERT(lock_held_by_current_thread(lock));
 
+	while (!list_empty(&lock->holder->donations)) // 기부자 정리
+	{
+		list_pop_front(&lock->holder->donations);
+	}
+
 	lock->holder = NULL;
 	sema_up(&lock->semaphore);
 }
@@ -273,6 +298,8 @@ struct semaphore_elem
 {
 	struct list_elem elem;		/* List element. */
 	struct semaphore semaphore; /* This semaphore. */
+
+	// int priority; // 갱신 필요?
 };
 
 /* Initializes condition variable COND.  A condition variable
@@ -316,6 +343,7 @@ void cond_wait(struct condition *cond, struct lock *lock)
 
 	sema_init(&waiter.semaphore, 0);
 	list_push_back(&cond->waiters, &waiter.elem);
+	// list_insert_ordered(&cond->waiters, &waiter.elem, larger, NULL);
 	lock_release(lock);
 	sema_down(&waiter.semaphore);
 	lock_acquire(lock);
