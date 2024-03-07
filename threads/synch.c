@@ -80,8 +80,6 @@ void sema_down(struct semaphore *sema)
 	{
 		list_push_back(&sema->waiters, &thread_current()->elem);
 		// list_insert_ordered(&sema->waiters, &thread_current()->elem, priority, NULL);
-		if (thread_current()->wait_on_lock != NULL)
-			donate_priority(&thread_current()->d_elem, thread_current()->wait_on_lock->holder);
 		thread_block(); // 실행 정지
 	}
 	sema->value--;
@@ -261,6 +259,7 @@ void lock_acquire(struct lock *lock)
 	if (lock->holder != NULL)
 	{
 		thread_current()->wait_on_lock = lock;
+		donate_priority(&thread_current()->d_elem, lock->holder);
 	}
 	sema_down(&lock->semaphore);
 	lock->holder = thread_current();
@@ -324,7 +323,7 @@ void lock_release(struct lock *lock)
 /* Returns true if the current thread holds LOCK, false
    otherwise.  (Note that testing whether some other thread holds
    a lock would be racy.)
-   현재 쓰레드가 잠금키(lock)을 갖고 있다면 true를 반환, 아닌경우 false반환. */
+   현재 쓰레드가 잠금키( lock)을 갖고 있다면 true를 반환, 아닌경우 false반환. */
 bool lock_held_by_current_thread(const struct lock *lock)
 {
 	ASSERT(lock != NULL);
