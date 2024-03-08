@@ -163,7 +163,8 @@ void sema_up(struct semaphore *sema)
 		thread_unblock(popth);
 	}
 	sema->value++;
-	thread_preempt();
+
+	thread_yield(); // thread_preempt();
 	intr_set_level(old_level);
 }
 
@@ -413,7 +414,7 @@ void cond_signal(struct condition *cond, struct lock *lock)
 	if (!list_empty(&cond->waiters))
 	{ // 맨 앞에 애한테 알림
 		list_sort(&cond->waiters, cond_priority, NULL);
-		struct list_elem *e = list_entry(list_front(&cond->waiters), struct semaphore_elem, elem);
+		// struct list_elem *e = list_entry(list_front(&cond->waiters), struct semaphore_elem, elem);
 		sema_up(&list_entry(list_pop_front(&cond->waiters),
 							struct semaphore_elem, elem)
 					 ->semaphore);
