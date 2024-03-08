@@ -607,7 +607,11 @@ int calc_one_priority()
 
 int calc_load_avg()
 {
-	int ready_threads = list_size(&ready_list) + 1; // running, ready 상태의 스레드 갯수
+	int ready_threads = list_size(&ready_list); // running, ready 상태의 스레드 갯수
+	if (thread_current()->name != "idle")
+	{
+		ready_threads += 1;
+	}
 	load_avg = ((int64_t)(59 / 60)) * load_avg / f + (1 / 60) * ready_threads;
 	// int64_t 일때 f = 1 << 31 ??
 }
