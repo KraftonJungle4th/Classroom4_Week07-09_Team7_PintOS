@@ -607,16 +607,14 @@ int calc_load_avg()
 	list_size(&ready_list) + 1;
 }
 
-int calc_recent_cpu()
+int calc_recent_cpu(struct thread *th)
 {
-	while (thread_list)
-	{
-		th->recent_cpu = (2 * load_avg) / (2 * load_avg + 1) * th->recent_cpu + th->nice;
-	}
+	th->recent_cpu = (2 * load_avg) / (2 * load_avg + 1) * th->recent_cpu + th->nice;
 }
 
-int increase_cpu() // running th -> recent_cpu++  1 tick
+int increase_recent_cpu(struct thread *th) // running th -> recent_cpu++  1 tick
 {
+	th->recent_cpu++;
 }
 
 /* Idle thread.  Executes when no other thread is ready to run.
