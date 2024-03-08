@@ -102,7 +102,7 @@ struct thread
 	int original;
 
 	int nice; // -20 ~ 20
-	double recent_cpu;
+	int recent_cpu;
 
 	struct lock *wait_on_lock;
 
@@ -159,8 +159,8 @@ void thread_set_nice(int);
 int thread_get_recent_cpu(void);
 int thread_get_load_avg(void);
 
-int calc_load_avg();
-int calc_recent_cpu();
+void calc_load_avg();
+void calc_recent_cpu();
 int calc_priority();
 
 void do_iret(struct intr_frame *tf);
