@@ -86,6 +86,7 @@ bool thread_mlfqs;
 
 int f = 1 << 14; // p 17 q 14
 static int load_avg;
+static struct list thread_list;
 
 static void kernel_thread(thread_func *, void *aux);
 
@@ -168,35 +169,36 @@ bool priority(const struct list_elem *a, const struct list_elem *b, void *aux)
 
 void thread_init(void)
 {
-    ASSERT(intr_get_level() == INTR_OFF);
+	ASSERT(intr_get_level() == INTR_OFF);
 
-    /* Reload the temporal gdt for the kernel
-     * This gdt does not include the user context.
-     * The kernel will rebuild the gdt with user context, in gdt_init ().
-     *
-     * 커널을 위해 임시 gdt를 다시 로드합니다.
-     * 이 gdt에는 사용자 컨텍스트가 포함되어 있지 않습니다.
-     * 커널은 사용자 컨텍스트가 포함된 gdt를 gdt_init()에서 다시 만들 것입니다. */
-    struct desc_ptr gdt_ds = {
-        .size = sizeof(gdt) - 1,
-        .address = (uint64_t)gdt};
-    lgdt(&gdt_ds);
+	/* Reload the temporal gdt for the kernel
+	 * This gdt does not include the user context.
+	 * The kernel will rebuild the gdt with user context, in gdt_init ().
+	 *
+	 * 커널을 위해 임시 gdt를 다시 로드합니다.
+	 * 이 gdt에는 사용자 컨텍스트가 포함되어 있지 않습니다.
+	 * 커널은 사용자 컨텍스트가 포함된 gdt를 gdt_init()에서 다시 만들 것입니다. */
+	struct desc_ptr gdt_ds = {
+		.size = sizeof(gdt) - 1,
+		.address = (uint64_t)gdt};
+	lgdt(&gdt_ds);
 
-    /* Init the global thread context
-       전역 스레드 컨텍스트 초기화 */
-    lock_init(&tid_lock);
-    list_init(&ready_list);
-    list_init(&sleep_list);
-    list_init(&destruction_req);
+	/* Init the global thread context
+	   전역 스레드 컨텍스트 초기화 */
+	lock_init(&tid_lock);
+	list_init(&ready_list);
+	list_init(&sleep_list);
+	list_init(&thread_list);
+	list_init(&destruction_req);
 
-    /* Set up a thread structure for the running thread.
-       실행중인 쓰레드를 위한 쓰레드 구조를 설정 */
-    initial_thread = running_thread();
-    init_thread(initial_thread, "main", PRI_DEFAULT);
-    initial_thread->status = THREAD_RUNNING;
-    initial_thread->tid = allocate_tid();
+	/* Set up a thread structure for the running thread.
+	   실행중인 쓰레드를 위한 쓰레드 구조를 설정 */
+	initial_thread = running_thread();
+	init_thread(initial_thread, "main", PRI_DEFAULT);
+	initial_thread->status = THREAD_RUNNING;
+	initial_thread->tid = allocate_tid();
 
-    load_avg = 0;
+	load_avg = 0;
 }
 
 /* Starts preemptive thread scheduling by enabling interrupts.
@@ -325,6 +327,9 @@ tid_t thread_create(const char *name, int priority,
        실행 큐에 추가 */
 
     thread_unblock(t);
+	list_push_back(&thread_list, &t->th_elem);
+
+	thread_unblock(t);
 
     struct thread *curr = running_thread();
     int cur_priority = curr->priority;
@@ -601,22 +606,36 @@ int calc_all_priority()
     }
 }
 
+/* Calculate one threads' priority. */
+int calc_one_priority(struct thread *t)
+{
+    double recent_cpu = t->recent_cpu;
+    int nice = t->nice;
+
+    int priority = PRI_MAX - (((int64_t)recent_cpu) * f / 4) - (nice * 2);
+
+    return priority;
+}
+
 int calc_load_avg()
 {
-    load_avg = (59 / 60) * load_avg + (1 / 60) * ready_threads; // ready_threads - running, ready 상태의 스레드 갯수
-    list_size(&ready_list) + 1;
+	int ready_threads = list_size(&ready_list); // running, ready 상태의 스레드 갯수
+	if (thread_current()->name != "idle")
+	{
+		ready_threads += 1;
+	}
+	load_avg = ((int64_t)(59 / 60)) * load_avg / f + (1 / 60) * ready_threads;
+	// int64_t 일때 f = 1 << 31 ??
 }
 
-int calc_recent_cpu()
+int calc_recent_cpu(struct thread *th)
 {
-    while (thread_list)
-    {
-        th->recent_cpu = (2 * load_avg) / (2 * load_avg + 1) * th->recent_cpu + th->nice;
-    }
+	th->recent_cpu = (2 * load_avg) / (2 * load_avg + 1) * th->recent_cpu + th->nice;
 }
 
-int increase_cpu() // running th -> recent_cpu++  1 tick
+int increase_recent_cpu(struct thread *th) // running th -> recent_cpu++  1 tick
 {
+	th->recent_cpu++;
 }
 
 /* Idle thread.  Executes when no other thread is ready to run.
@@ -897,25 +916,26 @@ schedule(void)
     process_activate(next);
 #endif
 
-    if (curr != next)
-    {
-        /* If the thread we switched from is dying, destroy its struct
-           thread. This must happen late so that thread_exit() doesn't
-           pull out the rug under itself.
-           We just queuing the page free reqeust here because the page is
-           currently used by the stack.
-           The real destruction logic will be called at the beginning of the
-           schedule(). */
-        if (curr && curr->status == THREAD_DYING && curr != initial_thread)
-        {
-            ASSERT(curr != next);
-            list_push_back(&destruction_req, &curr->elem);
-        }
+	if (curr != next)
+	{
+		/* If the thread we switched from is dying, destroy its struct
+		   thread. This must happen late so that thread_exit() doesn't
+		   pull out the rug under itself.
+		   We just queuing the page free reqeust here because the page is
+		   currently used by the stack.
+		   The real destruction logic will be called at the beginning of the
+		   schedule(). */
+		if (curr && curr->status == THREAD_DYING && curr != initial_thread)
+		{
+			ASSERT(curr != next);
+			list_push_back(&destruction_req, &curr->elem);
+			list_remove(&curr->th_elem); // DYING 예정인 스레드는 thread_list에서 제거해준다
+		}
 
-        /* Before switching the thread, we first save the information
-         * of current running. */
-        thread_launch(next);
-    }
+		/* Before switching the thread, we first save the information
+		 * of current running. */
+		thread_launch(next);
+	}
 }
 
 /* Returns a tid to use for a new thread.
@@ -932,15 +952,4 @@ allocate_tid(void)
     lock_release(&tid_lock); //
 
     return tid;
-}
-
-/* Calculate one threads' priority. */
-void calc_one_priority(struct thread *t)
-{
-    double recent_cpu = t->recent_cpu;
-    int nice = t->nice;
-
-    int priority = PRI_MAX - (((int64_t)recent_cpu) * f / 4) - (nice * 2);
-
-    return priority;
 }
