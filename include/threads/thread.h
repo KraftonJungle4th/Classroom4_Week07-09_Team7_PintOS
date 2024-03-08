@@ -101,6 +101,9 @@ struct thread
 	int priority;			   /* Priority. */
 	int original;
 
+	int nice; // -20 ~ 20
+	double recent_cpu;
+
 	struct lock *wait_on_lock;
 
 	/* Shared between thread.c and synch.c. */
@@ -153,6 +156,10 @@ int thread_get_nice(void);
 void thread_set_nice(int);
 int thread_get_recent_cpu(void);
 int thread_get_load_avg(void);
+
+int calc_load_avg();
+int calc_recent_cpu();
+int calc_priority();
 
 void do_iret(struct intr_frame *tf);
 

@@ -84,6 +84,9 @@ static unsigned thread_ticks; /* 마지막 양보 부터의 타이머틱스 ### 
    커널의 커맨드라인 옵션인 "-o mlfqs"에 의해 조정된다*/
 bool thread_mlfqs;
 
+int f = 1 << 14; // p 17 q 14
+static int load_avg;
+
 static void kernel_thread(thread_func *, void *aux);
 
 static void idle(void *aux UNUSED);
@@ -192,6 +195,8 @@ void thread_init(void)
 	init_thread(initial_thread, "main", PRI_DEFAULT);
 	initial_thread->status = THREAD_RUNNING;
 	initial_thread->tid = allocate_tid();
+
+	load_avg = 0;
 }
 
 /* Starts preemptive thread scheduling by enabling interrupts.
@@ -517,6 +522,8 @@ void thread_yield(void)
 		list_insert_ordered(&ready_list, &curr->elem, priority, NULL);
 	}
 
+	// curr->nice++;
+
 	do_schedule(THREAD_READY);
 	intr_set_level(old_level);
 }
@@ -574,7 +581,7 @@ int thread_get_nice(void)
 int thread_get_load_avg(void)
 {
 	/* TODO: Your implementation goes here */
-	// load_avg = (59 / 60) * load_avg + (1 / 60) * ready_threads;
+
 	return 0;
 }
 
@@ -584,6 +591,32 @@ int thread_get_recent_cpu(void)
 {
 	/* TODO: Your implementation goes here */
 	return 0;
+}
+
+int calc_all_priority()
+{
+	while (thread_list) // ready + block + running - idle   th_elem
+	{
+		th->priority = PRI_MAX - (th->recent_cpu / 4) - (th->nice * 2);
+	}
+}
+
+int calc_load_avg()
+{
+	load_avg = (59 / 60) * load_avg + (1 / 60) * ready_threads; // ready_threads - running, ready 상태의 스레드 갯수
+	list_size(&ready_list) + 1;
+}
+
+int calc_recent_cpu()
+{
+	while (thread_list)
+	{
+		th->recent_cpu = (2 * load_avg) / (2 * load_avg + 1) * th->recent_cpu + th->nice;
+	}
+}
+
+int increase_cpu() // running th -> recent_cpu++  1 tick
+{
 }
 
 /* Idle thread.  Executes when no other thread is ready to run.
@@ -678,6 +711,9 @@ init_thread(struct thread *t, const char *name, int priority)
 	t->original = priority;
 	// printf("init pri %d  ori %d\n", t->priority, t->original);
 	t->magic = THREAD_MAGIC;
+
+	t->nice = 0;
+	t->recent_cpu = 0;
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should
@@ -880,24 +916,6 @@ schedule(void)
 		 * of current running. */
 		thread_launch(next);
 	}
-	/* if (!list_empty(&ready_list))
-	{
-		struct list_elem *e = list_front(&ready_list);
-		while (e != NULL)
-		{
-			struct thread *t = list_entry(e, struct thread, elem);
-			printf("cur pri: %d    next pri: %d\n", curr->priority, next->priority);
-			printf("tid: %d pri: %d\n", t->tid, t->priority);
-			e = e->next;
-			if (e->next == NULL)
-				break;
-		}
-		// printf("cur pri: %d    next pri: %d\n", curr->priority, next->priority);
-	}
-	else
-	{
-		printf("ready list empty curr pri: %d\n", curr->priority);
-	} */
 }
 
 /* Returns a tid to use for a new thread.
