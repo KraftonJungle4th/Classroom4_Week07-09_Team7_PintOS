@@ -86,6 +86,7 @@ bool thread_mlfqs;
 
 int f = 1 << 14; // p 17 q 14
 static int load_avg;
+static struct list thread_list;
 
 static void kernel_thread(thread_func *, void *aux);
 
@@ -187,6 +188,7 @@ void thread_init(void)
 	lock_init(&tid_lock);
 	list_init(&ready_list);
 	list_init(&sleep_list);
+	list_init(&thread_list);
 	list_init(&destruction_req);
 
 	/* Set up a thread structure for the running thread.
@@ -323,6 +325,8 @@ tid_t thread_create(const char *name, int priority,
 
 	/* Add to run queue.
 	   실행 큐에 추가 */
+
+	list_push_back(&thread_list, &t->th_elem);
 
 	thread_unblock(t);
 
@@ -595,16 +599,21 @@ int thread_get_recent_cpu(void)
 
 int calc_all_priority()
 {
-	while (thread_list) // ready + block + running - idle   th_elem
-	{
-		th->priority = PRI_MAX - (th->recent_cpu / 4) - (th->nice * 2);
-	}
+}
+
+int calc_one_priority()
+{
 }
 
 int calc_load_avg()
 {
-	load_avg = (59 / 60) * load_avg + (1 / 60) * ready_threads; // ready_threads - running, ready 상태의 스레드 갯수
-	list_size(&ready_list) + 1;
+	int ready_threads = list_size(&ready_list); // running, ready 상태의 스레드 갯수
+	if (thread_current()->name != "idle")
+	{
+		ready_threads += 1;
+	}
+	load_avg = ((int64_t)(59 / 60)) * load_avg / f + (1 / 60) * ready_threads;
+	// int64_t 일때 f = 1 << 31 ??
 }
 
 int calc_recent_cpu(struct thread *th)
@@ -908,6 +917,7 @@ schedule(void)
 		{
 			ASSERT(curr != next);
 			list_push_back(&destruction_req, &curr->elem);
+			list_remove(&curr->th_elem); // DYING 예정인 스레드는 thread_list에서 제거해준다
 		}
 
 		/* Before switching the thread, we first save the information
