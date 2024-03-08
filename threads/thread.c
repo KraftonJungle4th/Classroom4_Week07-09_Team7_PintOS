@@ -328,6 +328,7 @@ tid_t thread_create(const char *name, int priority,
 	   실행 큐에 추가 */
 
 	thread_unblock(t);
+
 	struct thread *curr = running_thread();
 	int cur_priority = curr->priority;
 	// printf("tid : %d  T: %d\n", curr->priority, t->priority);
