@@ -163,14 +163,6 @@ bool priority(const struct list_elem *a, const struct list_elem *b, void *aux)
 	return ta->priority > tb->priority;
 }
 
-bool d_elem_priority(const struct list_elem *a, const struct list_elem *b, void *aux)
-{
-	struct thread *ta = list_entry(a, struct thread, d_elem);
-	struct thread *tb = list_entry(b, struct thread, d_elem);
-
-	return ta->priority > tb->priority;
-}
-
 void thread_init(void)
 {
 	ASSERT(intr_get_level() == INTR_OFF);
@@ -331,7 +323,6 @@ tid_t thread_create(const char *name, int priority,
 
 	struct thread *curr = running_thread();
 	int cur_priority = curr->priority;
-	// printf("tid : %d  T: %d\n", curr->priority, t->priority);
 
 	if (!list_empty(&ready_list) && list_entry(list_front(&ready_list), struct thread, elem)->priority > cur_priority)
 	{
@@ -536,11 +527,11 @@ void thread_set_priority(int new_priority)
 {
 	struct thread *curr = thread_current();
 	curr->original = curr->priority = new_priority;
-	if (!list_empty(&curr->donations))
-	{
-		curr->priority = list_entry(list_front(&curr->donations), struct thread, d_elem)
-							 ->priority;
-	}
+	// if (!list_empty(&curr->donations))
+	// {
+	// 	curr->priority = list_entry(list_front(&curr->donations), struct thread, d_elem)
+	// 						 ->priority;
+	// }
 
 	if (list_empty(&ready_list))
 		return;
@@ -687,7 +678,6 @@ init_thread(struct thread *t, const char *name, int priority)
 	t->original = priority;
 	// printf("init pri %d  ori %d\n", t->priority, t->original);
 	t->magic = THREAD_MAGIC;
-	list_init(&t->donations);
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should
