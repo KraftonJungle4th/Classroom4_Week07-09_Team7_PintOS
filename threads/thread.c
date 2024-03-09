@@ -95,18 +95,9 @@ static int ready_threads;
 #define MUL(x, y) ((((int64_t)(x)) * y) >> FIXED)
 #define DIV(x, y) ((((int64_t)(x)) << FIXED) / y)
 #define TOINT(x) ((x + (FIXED >> 1)) >> FIXED)
+#define TOINT_POS(x) ((x + (FIXED / 2)) / FIXED)
+#define TOINT_NEG(x) ((x - (FIXED / 2)) / FIXED)
 #define TOFIX(x) (x << FIXED)
-
-// #define FIXED (1 << 14)
-// #define ADD_INT(x, y) ((x) + ((y) * FIXED)) // y = integer
-// #define ADD_FIX(x, y) (x) + (y)
-// #define SUB(x, y) ((x) - ((y) * FIXED))
-// #define MUL(x, y) ((((int64_t)(x)) * y) / FIXED)
-// #define MUL_INT(x, y) (x) * (y)
-// #define DIV(x, y) ((((int64_t)(x)) * FIXED) / y)
-// #define TOINT_POS(x) ((x + (FIXED / 2)) / FIXED)
-// #define TOINT_NEG(x) ((x - (FIXED / 2)) / FIXED)
-// #define TOFIX(x) (x * FIXED)
 
 static void kernel_thread(thread_func *, void *aux);
 
@@ -587,9 +578,10 @@ int thread_get_priority(void)
 
 /* Sets the current thread's nice value to NICE.
    현재 스레드의 nice 값을 NICE로 설정합니다. */
-void thread_set_nice(int nice UNUSED)
+void thread_set_nice(int nice) // UNUSED
 {
     /* TODO: Your implementation goes here */
+    thread_current()->nice = nice;
 }
 
 /* Returns the current thread's nice value.
@@ -627,18 +619,24 @@ int calc_all_priority()
 /* Calculate one threads' priority. */
 int calc_one_priority(struct thread *t)
 {
-    int recent_cpu = t->recent_cpu;
-    int nice = t->nice;
+    int recent_cpu = t->recent_cpu; // 고정소수
+    int nice = t->nice;             // 정수
 
-    int priority = PRI_MAX - (((int64_t)recent_cpu) * FIXED / 4) - (nice * 2);
+    int save = (DIV(recent_cpu, TOFIX(4))) - TOFIX(nice * 2);
+    if (save >= 0)
+        save = TOINT_POS(save);
+    else
+        save = TOINT_NEG(save);
+
+    int priority = PRI_MAX - save; // 정수
 
     return priority;
 }
 
 void calc_load_avg()
 {
-    ready_threads = list_size(&ready_list); // running, ready 상태의 스레드 갯수
-    if (thread_current() != idle_thread)
+    ready_threads = list_size(&ready_list);     // running, ready 상태의 스레드 갯수
+    if (strcmp(thread_current()->name, "idle")) // idle_thread)
     {
         ready_threads += 1;
     }
@@ -647,12 +645,12 @@ void calc_load_avg()
 
 void calc_recent_cpu(struct thread *th)
 {
-    th->recent_cpu = (2 * load_avg) / (2 * load_avg + (1 * FIXED)) * th->recent_cpu + (th->nice * FIXED);
+    th->recent_cpu = MUL((DIV((2 * load_avg), ((2 * load_avg) + TOFIX(1)))), th->recent_cpu) + TOFIX(th->nice);
 }
 
 void increase_recent_cpu(struct thread *th) // running th -> recent_cpu++  1 tick
 {
-    th->recent_cpu += 1;
+    th->recent_cpu += TOFIX(1);
 }
 
 /* Idle thread.  Executes when no other thread is ready to run.
