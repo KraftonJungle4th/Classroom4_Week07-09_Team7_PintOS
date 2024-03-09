@@ -94,9 +94,7 @@ static int ready_threads;
 #define SUB(x, y) ((x) - ((y) << FIXED))
 #define MUL(x, y) ((((int64_t)(x)) * y) >> FIXED)
 #define DIV(x, y) ((((int64_t)(x)) << FIXED) / y)
-#define TOINT(x) ((x + (FIXED >> 1)) >> FIXED)
-#define TOINT_POS(x) ((x + (FIXED / 2)) / FIXED)
-#define TOINT_NEG(x) ((x - (FIXED / 2)) / FIXED)
+#define TOINT(x) (x >= 0) ? ((x + (FIXED >> 1)) >> FIXED) : ((x - (FIXED / 2)) / FIXED)
 #define TOFIX(x) (x << FIXED)
 
 static void kernel_thread(thread_func *, void *aux);
@@ -254,11 +252,13 @@ void thread_tick(void)
     else //
         kernel_ticks++;
 
-    t->recent_cpu += TOFIX(1);
+    increase_recent_cpu(t);
     /* Enforce preemption.
        선점 실행 */
     if (++thread_ticks >= TIME_SLICE)
+    {
         intr_yield_on_return();
+    }
 }
 
 /* Prints thread statistics.
@@ -534,8 +534,6 @@ void thread_yield(void)
         list_insert_ordered(&ready_list, &curr->elem, priority, NULL);
     }
 
-    // curr->nice++;
-
     do_schedule(THREAD_READY);
     intr_set_level(old_level);
 }
@@ -578,9 +576,10 @@ int thread_get_priority(void)
 void thread_set_nice(int nice) // UNUSED
 {
     /* TODO: Your implementation goes here */
-    thread_current()->nice = nice;
-
-    calc_one_priority(thread_current());
+    struct thread *t = thread_current();
+    t->nice = nice;
+    calc_one_priority(t);
+    thread_yield();
 }
 
 /* Returns the current thread's nice value.
@@ -604,10 +603,7 @@ int thread_get_load_avg(void)
 int thread_get_recent_cpu(void)
 {
     /* TODO: Your implementation goes here */
-    if (thread_current()->recent_cpu >= 0)
-        return TOINT_POS(MUL(thread_current()->recent_cpu, TOFIX(100)));
-    else
-        return TOINT_NEG(MUL(thread_current()->recent_cpu, TOFIX(100)));
+    return TOINT(MUL(thread_current()->recent_cpu, TOFIX(100)));
 }
 
 void calc_all_priority()
@@ -623,15 +619,17 @@ void calc_all_priority()
 
         e = e->next;
     }
-
-    if (!list_empty(&ready_list))
-    {
-        list_sort(&ready_list, priority, NULL);
-        struct list_elem *e = list_front(&ready_list);
-        if (thread_current()->priority < list_entry(e, struct thread, elem)->priority)
-        {
-                }
-    }
+    list_sort(&ready_list, priority, NULL);
+    // if (!list_empty(&ready_list))
+    // {
+    //
+    //     struct list_elem *e = list_front(&ready_list);
+    //     if (thread_current()->priority < list_entry(e, struct thread, elem)->priority)
+    //     {
+    //         // thread_yield();
+    //     }
+    // }
+    // intr_yield_on_return();
 }
 
 /* Calculate one threads' priority. */
@@ -641,12 +639,7 @@ int calc_one_priority(struct thread *t)
     int nice = t->nice;             // 정수
 
     int save = (DIV(recent_cpu, TOFIX(4))) - TOFIX(nice * 2);
-    if (save >= 0)
-        save = TOINT_POS(save);
-    else
-        save = TOINT_NEG(save);
-
-    int priority = PRI_MAX - save; // 정수
+    int priority = PRI_MAX - TOINT(save); // 정수
 
     return priority;
 }
@@ -658,7 +651,7 @@ void calc_load_avg()
     {
         ready_threads += 1;
     }
-    load_avg = MUL((TOFIX(59) / 60), load_avg) + ((TOFIX(1) / 60)) * ready_threads;
+    load_avg = MUL((TOFIX(59) / 60), load_avg) + (((TOFIX(1) / 60)) * ready_threads);
 }
 
 void calc_all_recent_cpu()
@@ -667,7 +660,7 @@ void calc_all_recent_cpu()
         return;
 
     struct list_elem *e = list_front(&thread_list);
-    while (e != NULL) // ready + block + running - idle   th_elem
+    while (e != NULL) // ready + block + running + sleep - idle   th_elem
     {
         struct thread *t = list_entry(e, struct thread, th_elem);
         t->recent_cpu = calc_recent_cpu(t);
@@ -678,7 +671,7 @@ void calc_all_recent_cpu()
 
 int calc_recent_cpu(struct thread *th)
 {
-    int recent_cpu = MUL((DIV((2 * load_avg), ((2 * load_avg) + TOFIX(1)))), th->recent_cpu) + TOFIX(th->nice);
+    int recent_cpu = MUL(DIV((MUL(TOFIX(2), load_avg)), ((MUL(TOFIX(2), load_avg)) + TOFIX(1))), th->recent_cpu) + TOFIX(th->nice);
 
     return recent_cpu;
 }
@@ -807,7 +800,6 @@ next_thread_to_run(void)
     else
     {
         // list_sort(&ready_list, priority, NULL);
-        // printf("pri:   %d\n", list_entry(list_begin(&ready_list), struct thread, elem)->priority);
         return list_entry(list_pop_front(&ready_list), struct thread, elem);
     }
 }
@@ -981,11 +973,23 @@ schedule(void)
             list_push_back(&destruction_req, &curr->elem);
             list_remove(&curr->th_elem); // DYING 예정인 스레드는 thread_list에서 제거해준다
         }
+        // curr->nice--;
+        // next->nice++;
 
         /* Before switching the thread, we first save the information
          * of current running. */
         thread_launch(next);
     }
+    // else
+    // {
+    //     curr->nice++;
+    // }
+    // if (!list_empty(&ready_list))
+    // {
+    //     struct list_elem *e = list_end(&ready_list);
+    //     struct thread *t = list_entry(e, struct thread, elem);
+    //     t->nice--;
+    // }
 }
 
 /* Returns a tid to use for a new thread.
