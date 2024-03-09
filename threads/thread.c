@@ -87,14 +87,26 @@ bool thread_mlfqs;
 // int f = 1 << 14; // p 17 q 14
 static int load_avg;
 static struct list thread_list;
+static int ready_threads;
 
-#define FIXED 1 << 14
-#define ADD(x, y) ((x) + ((y) * FIXED))
-#define SUB(x, y) ((x) - ((y) * FIXED))
-#define MUL(x, y) (((int64_t)x) * (y) / FIXED)
-#define DIV(x, y) (((int64_t)x) * FIXED / (y))
-#define TOINT(x) ((x + FIXED / 2) / FIXED)
-#define TOFIX(x) (x * FIXED)
+#define FIXED (14)
+#define ADD(x, y) ((x) + ((y) << FIXED)) // y = integer
+#define SUB(x, y) ((x) - ((y) << FIXED))
+#define MUL(x, y) ((((int64_t)(x)) * y) >> FIXED)
+#define DIV(x, y) ((((int64_t)(x)) << FIXED) / y)
+#define TOINT(x) ((x + (FIXED >> 1)) >> FIXED)
+#define TOFIX(x) (x << FIXED)
+
+// #define FIXED (1 << 14)
+// #define ADD_INT(x, y) ((x) + ((y) * FIXED)) // y = integer
+// #define ADD_FIX(x, y) (x) + (y)
+// #define SUB(x, y) ((x) - ((y) * FIXED))
+// #define MUL(x, y) ((((int64_t)(x)) * y) / FIXED)
+// #define MUL_INT(x, y) (x) * (y)
+// #define DIV(x, y) ((((int64_t)(x)) * FIXED) / y)
+// #define TOINT_POS(x) ((x + (FIXED / 2)) / FIXED)
+// #define TOINT_NEG(x) ((x - (FIXED / 2)) / FIXED)
+// #define TOFIX(x) (x * FIXED)
 
 static void kernel_thread(thread_func *, void *aux);
 
@@ -593,8 +605,7 @@ int thread_get_nice(void)
 int thread_get_load_avg(void)
 {
 	/* TODO: Your implementation goes here */
-
-	return load_avg * 100;
+	return TOINT(MUL(load_avg, TOFIX(100)));
 }
 
 /* Returns 100 times the current thread's recent_cpu value.
@@ -626,21 +637,12 @@ int calc_one_priority(struct thread *t)
 
 void calc_load_avg()
 {
-	int ready_threads = list_size(&ready_list); // running, ready 상태의 스레드 갯수
-	if (thread_current()->name != "idle")
+	ready_threads = list_size(&ready_list); // running, ready 상태의 스레드 갯수
+	if (thread_current() != idle_thread)
 	{
 		ready_threads += 1;
 	}
-	// load_avg = ((int64_t)(((int64_t)(59 * FIXED) * FIXED) / (60 * FIXED))) * (load_avg * FIXED) / FIXED + ((int64_t)(((int64_t)(1 * FIXED)) * FIXED / (60 * FIXED))) * (ready_threads * FIXED) / FIXED;
-	int cur_avg;
-	int next_avg;
-	// cur_avg = load_avg;
-	// next_avg = ((((int64_t)((59 / 60) * FIXED)) * cur_avg) / FIXED + FIXED / 2) / FIXED + ((((int64_t)((1 / 60) * FIXED) + FIXED / 2) / FIXED) * ready_threads);
-	//  next_avg = ((((((59 * f) / 60)) * cur_avg) + (((1 * f) / 60)) * ready_threads) + f / 2) / f;
-	// load_avg = next_avg;
-	// load_avg = MUL((TOFIX(59) / 60), load_avg) + MUL((TOFIX(1) / 60), ready_threads);
-	load_avg = MUL((DIV(TOFIX(59), TOFIX(60))), load_avg) + DIV(TOFIX(1), TOFIX(60)) * ready_threads;
-	//  load_avg = (((((int64_t)((59 * FIXED) / 60)) * (load_avg * FIXED)) / FIXED + ((1 * FIXED) / 60) * ready_threads) + FIXED / 2) / FIXED;
+	load_avg = MUL((DIV(TOFIX(59), TOFIX(60))), load_avg) + (DIV(TOFIX(1), TOFIX(60))) * ready_threads;
 }
 
 void calc_recent_cpu(struct thread *th)
