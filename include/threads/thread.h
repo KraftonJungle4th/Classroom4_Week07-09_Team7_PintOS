@@ -160,8 +160,8 @@ int thread_get_recent_cpu(void);
 int thread_get_load_avg(void);
 
 void calc_load_avg();
-void calc_recent_cpu();
-int calc_priority();
+void calc_all_recent_cpu();
+void calc_all_priority();
 
 void do_iret(struct intr_frame *tf);
 

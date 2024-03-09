@@ -174,12 +174,12 @@ timer_interrupt(struct intr_frame *args UNUSED)
     if (timer_ticks() % TIMER_FREQ == 0)
     {
         calc_load_avg();
-        calc_recent_cpu();
+        calc_all_recent_cpu();
     }
-    // if (timer_ticks() % 4 == 0)
-    // {
-    //     calc_priority();
-    // }
+    if (timer_ticks() % 4 == 0)
+    {
+        calc_all_priority();
+    }
 }
 
 /* Returns true if LOOPS iterations waits for more than one timer

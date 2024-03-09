@@ -254,6 +254,7 @@ void thread_tick(void)
     else //
         kernel_ticks++;
 
+    t->recent_cpu += TOFIX(1);
     /* Enforce preemption.
        선점 실행 */
     if (++thread_ticks >= TIME_SLICE)
@@ -336,8 +337,8 @@ tid_t thread_create(const char *name, int priority,
 
     /* Add to run queue.
        실행 큐에 추가 */
-
-    list_push_back(&thread_list, &t->th_elem);
+    if (strcmp(name, "idle"))
+        list_push_back(&thread_list, &t->th_elem);
 
     thread_unblock(t);
 
@@ -405,10 +406,6 @@ void thread_preempt(void)
     if (list_empty(&ready_list))
         return;
 
-    /* 	if (curr_prio < list_entry(list_front(&ready_list), struct thread, elem)->priority)
-        {
-            do_schedule(THREAD_READY);
-        } */
     if (list_entry(list_front(&ready_list), struct thread, elem)->priority > curr_prio)
     {
         thread_yield();
@@ -582,6 +579,8 @@ void thread_set_nice(int nice) // UNUSED
 {
     /* TODO: Your implementation goes here */
     thread_current()->nice = nice;
+
+    calc_one_priority(thread_current());
 }
 
 /* Returns the current thread's nice value.
@@ -589,7 +588,7 @@ void thread_set_nice(int nice) // UNUSED
 int thread_get_nice(void)
 {
     /* TODO: Your implementation goes here */
-    return 0;
+    return thread_current()->nice;
 }
 
 /* Returns 100 times the system load average.
@@ -605,15 +604,34 @@ int thread_get_load_avg(void)
 int thread_get_recent_cpu(void)
 {
     /* TODO: Your implementation goes here */
-    return 0;
+    if (thread_current()->recent_cpu >= 0)
+        return TOINT_POS(MUL(thread_current()->recent_cpu, TOFIX(100)));
+    else
+        return TOINT_NEG(MUL(thread_current()->recent_cpu, TOFIX(100)));
 }
 
-int calc_all_priority()
+void calc_all_priority()
 {
-    // while (thread_list) // ready + block + running - idle   th_elem
-    // {
-    // 	th->priority = PRI_MAX - (th->recent_cpu / 4) - (th->nice * 2);
-    // }
+    if (list_empty(&thread_list))
+        return;
+
+    struct list_elem *e = list_front(&thread_list);
+    while (e != NULL) // ready + block + running - idle   th_elem
+    {
+        struct thread *t = list_entry(e, struct thread, th_elem);
+        t->priority = calc_one_priority(t);
+
+        e = e->next;
+    }
+
+    if (!list_empty(&ready_list))
+    {
+        list_sort(&ready_list, priority, NULL);
+        struct list_elem *e = list_front(&ready_list);
+        if (thread_current()->priority < list_entry(e, struct thread, elem)->priority)
+        {
+                }
+    }
 }
 
 /* Calculate one threads' priority. */
@@ -640,12 +658,29 @@ void calc_load_avg()
     {
         ready_threads += 1;
     }
-    load_avg = MUL((DIV(TOFIX(59), TOFIX(60))), load_avg) + (DIV(TOFIX(1), TOFIX(60))) * ready_threads;
+    load_avg = MUL((TOFIX(59) / 60), load_avg) + ((TOFIX(1) / 60)) * ready_threads;
 }
 
-void calc_recent_cpu(struct thread *th)
+void calc_all_recent_cpu()
 {
-    th->recent_cpu = MUL((DIV((2 * load_avg), ((2 * load_avg) + TOFIX(1)))), th->recent_cpu) + TOFIX(th->nice);
+    if (list_empty(&thread_list))
+        return;
+
+    struct list_elem *e = list_front(&thread_list);
+    while (e != NULL) // ready + block + running - idle   th_elem
+    {
+        struct thread *t = list_entry(e, struct thread, th_elem);
+        t->recent_cpu = calc_recent_cpu(t);
+
+        e = e->next;
+    }
+}
+
+int calc_recent_cpu(struct thread *th)
+{
+    int recent_cpu = MUL((DIV((2 * load_avg), ((2 * load_avg) + TOFIX(1)))), th->recent_cpu) + TOFIX(th->nice);
+
+    return recent_cpu;
 }
 
 void increase_recent_cpu(struct thread *th) // running th -> recent_cpu++  1 tick
