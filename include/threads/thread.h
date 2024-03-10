@@ -105,10 +105,11 @@ struct thread
     int recent_cpu;
 
     struct lock *wait_on_lock;
+    struct list donations; // 기부해준 스레드
 
     /* Shared between thread.c and synch.c. */
     struct list_elem elem; /* List element. */
-
+    struct list_elem d_elem;
     struct list_elem th_elem; // thread_list
 
 #ifdef USERPROG
@@ -159,9 +160,12 @@ void thread_set_nice(int);
 int thread_get_recent_cpu(void);
 int thread_get_load_avg(void);
 
-void calc_load_avg();
-void calc_all_recent_cpu();
-void calc_all_priority();
+void calc_load_avg(void);
+void calc_all_recent_cpu(void);
+void calc_all_priority(void);
+int calc_recent_cpu(struct thread *th);
+int calc_one_priority(struct thread *t);
+void increase_recent_cpu(struct thread *th);
 
 void do_iret(struct intr_frame *tf);
 
@@ -169,6 +173,7 @@ void thread_wakeup(int64_t ticks);
 void thread_sleep(int64_t sleep_time);
 
 bool priority(const struct list_elem *a, const struct list_elem *b, void *aux);
+bool d_elem_priority(const struct list_elem *a, const struct list_elem *b, void *aux);
 
 void thread_preempt(void);
 

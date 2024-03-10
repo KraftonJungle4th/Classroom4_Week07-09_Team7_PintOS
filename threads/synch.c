@@ -125,6 +125,15 @@ void sema_up(struct semaphore *sema)
     if (!list_empty(&sema->waiters))
     {
         struct thread *curr = thread_current();
+        if (!thread_mlfqs)
+        {
+            if (!list_empty(&curr->donations))
+            {
+                curr->priority = list_entry(list_front(&curr->donations), struct thread, d_elem)->priority;
+            }
+            else
+                thread_current()->priority = thread_current()->original;
+        }
 
         list_sort(&sema->waiters, priority, NULL);
         struct thread *popth = list_entry(list_pop_front(&sema->waiters),
@@ -229,11 +238,37 @@ void lock_acquire(struct lock *lock)
     if (lock->holder != NULL)
     {
         thread_current()->wait_on_lock = lock;
+
+        if (!thread_mlfqs)
+            donate_priority(&thread_current()->d_elem, lock->holder);
     }
     sema_down(&lock->semaphore);
     lock->holder = thread_current();
     if (thread_current()->wait_on_lock != NULL)
         thread_current()->wait_on_lock = NULL;
+}
+
+// 기부자 리스트에서 가장 높은 우선순위 받아오기
+void donate_priority(struct list_elem *donor, struct thread *holder)
+{
+    // struct thread *donor = list_entry(list_front(&waiters->waiters), struct thread, elem);
+    list_insert_ordered(&holder->donations, donor, d_elem_priority, NULL);
+    int dona_prio = list_entry(list_front(&holder->donations), struct thread, d_elem)->priority;
+    if (holder->priority < dona_prio)
+    {
+        holder->priority = dona_prio;
+    }
+
+    while (holder->wait_on_lock != NULL)
+    { // 다른 lock에 대해 기다리는 중이면
+        holder = holder->wait_on_lock->holder;
+        list_sort(&holder->donations, d_elem_priority, NULL);
+        int dona_prio = list_entry(list_front(&holder->donations), struct thread, d_elem)->priority;
+        if (holder->priority < dona_prio)
+        {
+            holder->priority = dona_prio;
+        }
+    }
 }
 
 /* Tries to acquires LOCK and returns true if successful or false
@@ -265,6 +300,27 @@ void lock_release(struct lock *lock)
 {
     ASSERT(lock != NULL);
     ASSERT(lock_held_by_current_thread(lock));
+
+    if (!thread_mlfqs)
+    {
+        if (!list_empty(&lock->holder->donations))
+        {
+            struct list_elem *e = list_front(&lock->holder->donations);
+            while (e != NULL)
+            {
+                struct thread *t = list_entry(e, struct thread, d_elem);
+
+                if (t->wait_on_lock == lock)
+                {
+                    list_remove(&t->d_elem);
+                }
+
+                e = e->next;
+                if (e->next == NULL)
+                    break;
+            }
+        }
+    }
 
     lock->holder = NULL;
     sema_up(&lock->semaphore);
