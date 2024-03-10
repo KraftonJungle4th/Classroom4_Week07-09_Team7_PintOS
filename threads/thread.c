@@ -94,7 +94,8 @@ static struct list thread_list;
 #define SUB(x, y) ((x) - ((y) << FIXED))
 #define MUL(x, y) ((((int64_t)(x)) * y) >> FIXED)
 #define DIV(x, y) ((((int64_t)(x)) << FIXED) / y)
-#define TOINT(x) (x >= 0) ? ((x + (FIXED >> 1)) >> FIXED) : ((x - (FIXED / 2)) / FIXED)
+#define TOINT(x) (x >= 0) ? ((x + ((1 << FIXED) >> 1)) >> FIXED) : ((x - ((1 << FIXED) >> 1)) >> FIXED)
+#define TOINT_ZERO(x) ((x) >> FIXED)
 #define TOFIX(x) (x << FIXED)
 
 static void kernel_thread(thread_func *, void *aux);
@@ -214,8 +215,6 @@ void thread_init(void)
     init_thread(initial_thread, "main", PRI_DEFAULT);
     initial_thread->status = THREAD_RUNNING;
     initial_thread->tid = allocate_tid();
-
-    // load_avg = 0;
 }
 
 /* Starts preemptive thread scheduling by enabling interrupts.
@@ -346,9 +345,6 @@ tid_t thread_create(const char *name, int priority,
 
     /* Add to run queue.
        실행 큐에 추가 */
-    if (strcmp(name, "idle"))
-        list_push_back(&thread_list, &t->th_elem);
-
     thread_unblock(t);
 
     struct thread *curr = thread_current();
@@ -590,7 +586,7 @@ void thread_set_nice(int nice) // UNUSED
     struct thread *t = thread_current();
     t->nice = nice;
     calc_one_priority(t);
-    thread_yield();
+    // thread_yield();
 }
 
 /* Returns the current thread's nice value.
@@ -621,7 +617,7 @@ int thread_get_recent_cpu(void)
     return TOINT(MUL(cpu, TOFIX(100)));
 }
 
-void calc_all_priority()
+void calc_all_priority(void)
 {
     if (list_empty(&thread_list))
         return;
@@ -630,23 +626,24 @@ void calc_all_priority()
     while (e != list_end(&thread_list)) // ready + block + running + sleep - idle   th_elem
     {
         struct thread *t = list_entry(e, struct thread, th_elem);
-        t->original = t->priority = calc_one_priority(t);
-        // msg("pri %d", t->priority);
+        // t->original = t->priority = calc_one_priority(t);
+        t->priority = calc_one_priority(t);
+
         e = e->next;
     }
-    // list_sort(&ready_list, priority, NULL);
 }
 
 /* Calculate one threads' priority. */
 int calc_one_priority(struct thread *t)
 {
-    int recent_cpu = t->recent_cpu; // 고정소수
-    int nice = t->nice;             // 정수
+    // int priority = PRI_MAX - TOINT((DIV(recent_cpu, TOFIX(4))) - TOFIX(nice * 2)); // 정수
+    // int priority = PRI_MAX - (TOINT(t->recent_cpu) / 4) - (nice * 2);
+    int priority = PRI_MAX - (TOINT_ZERO(t->recent_cpu) / 4) - (t->nice * 2);
 
-    // int save = (DIV(recent_cpu, TOFIX(4))) - TOFIX(nice * 2);
-    int priority = PRI_MAX - TOINT((DIV(recent_cpu, TOFIX(4))) - TOFIX(nice * 2)); // 정수
-    // int priority = PRI_MAX - TOINT(DIV(t->recent_cpu, TOFIX(4))) - (nice * 2);
-
+    if (priority > PRI_MAX)
+        priority = PRI_MAX;
+    else if (priority < PRI_MIN)
+        priority = PRI_MIN;
     return priority;
 }
 
@@ -659,22 +656,22 @@ void calc_load_avg()
     }
     // load_avg = MUL((TOFIX(59) / 60), load_avg) + MUL((TOFIX(1) / 60), TOFIX(ready_threads));
     load_avg = MUL((DIV(TOFIX(59), TOFIX(60))), load_avg) + ((TOFIX(1) / 60) * ready_threads);
-    // msg("load avg %d", load_avg);
-    //
+
+    // msg("pri %d  tid: %d  nice %d", thread_current()->priority, thread_current()->tid, thread_current()->nice);
 }
 
 void calc_all_recent_cpu()
 {
     if (list_empty(&thread_list))
         return;
-    // msg("load avg %d,  tid: %s", load_avg, thread_current()->name);
+
     struct list_elem *e = list_front(&thread_list);
     while (e != list_end(&thread_list)) // ready + block + running + sleep - idle   th_elem
     {
         struct thread *t = list_entry(e, struct thread, th_elem);
+
         t->recent_cpu = calc_recent_cpu(t);
-        // msg("cpu %d", t->recent_cpu);
-        // msg("tid :%d\n", t->tid);
+        t->priority = calc_one_priority(t);
         e = e->next;
     }
 }
@@ -683,8 +680,8 @@ int calc_recent_cpu(struct thread *th)
 {
     int old_cpu = th->recent_cpu;
     int nice = th->nice;
-    int recent_cpu = MUL((DIV((2 * load_avg), ((2 * load_avg) + TOFIX(1)))), old_cpu) + TOFIX(nice);
-    // msg("cpu in avg %d and cpu %d", load_avg, recent_cpu);
+    // int recent_cpu = MUL((DIV((2 * load_avg), ((2 * load_avg) + TOFIX(1)))), old_cpu) + TOFIX(nice);
+    int recent_cpu = MUL((DIV(MUL(TOFIX(2), load_avg), (MUL(TOFIX(2), load_avg) + TOFIX(1)))), old_cpu) + TOFIX(nice);
 
     return recent_cpu;
 }
@@ -789,6 +786,9 @@ init_thread(struct thread *t, const char *name, int priority)
     list_init(&t->donations);
     t->nice = 0;
     t->recent_cpu = 0;
+
+    if (strcmp(name, "idle"))
+        list_push_back(&thread_list, &t->th_elem);
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should

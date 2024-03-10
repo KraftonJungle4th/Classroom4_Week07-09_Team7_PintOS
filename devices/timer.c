@@ -173,13 +173,13 @@ timer_interrupt(struct intr_frame *args UNUSED)
 
     if (!thread_mlfqs)
         return;
-    if (timer_ticks() % TIMER_FREQ == 0)
-    {
-        calc_load_avg();
-        // calc_all_recent_cpu();
-    }
     if (timer_ticks() % 4 == 0)
     {
+        if (timer_ticks() % TIMER_FREQ == 0)
+        {
+            calc_load_avg();
+            calc_all_recent_cpu();
+        }
         calc_all_priority();
     }
 }
