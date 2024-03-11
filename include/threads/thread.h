@@ -12,10 +12,10 @@
 /* States in a thread's life cycle. */
 enum thread_status
 {
-	THREAD_RUNNING, /* Running thread. */
-	THREAD_READY,	/* Not running but ready to run. */
-	THREAD_BLOCKED, /* Waiting for an event to trigger. */
-	THREAD_DYING,	/* About to be destroyed. */
+    THREAD_RUNNING, /* Running thread. */
+    THREAD_READY,   /* Not running but ready to run. */
+    THREAD_BLOCKED, /* Waiting for an event to trigger. */
+    THREAD_DYING,   /* About to be destroyed. */
 };
 
 /* Thread identifier type.
@@ -24,9 +24,9 @@ typedef int tid_t;
 #define TID_ERROR ((tid_t)-1) /* Error value for tid_t. */
 
 /* Thread priorities. */
-#define PRI_MIN 0	   /* Lowest priority. */
+#define PRI_MIN 0      /* Lowest priority. */
 #define PRI_DEFAULT 31 /* Default priority. */
-#define PRI_MAX 63	   /* Highest priority. */
+#define PRI_MAX 63     /* Highest priority. */
 
 /* A kernel thread or user process.
  *
@@ -94,34 +94,38 @@ typedef int tid_t;
  * 에 있습니다. */
 struct thread
 {
-	/* Owned by thread.c. */
-	tid_t tid;				   /* Thread identifier. */
-	enum thread_status status; /* Thread state. */
-	char name[16];			   /* Name (for debugging purposes). */
-	int priority;			   /* Priority. */
-	int original;
+    /* Owned by thread.c. */
+    tid_t tid;                 /* Thread identifier. */
+    enum thread_status status; /* Thread state. */
+    char name[16];             /* Name (for debugging purposes). */
+    int priority;              /* Priority. */
+    int original;
 
-	struct lock *wait_on_lock;
-	struct list donations; // 기부해준 스레드
+    int nice; // -20 ~ 20
+    int recent_cpu;
 
-	/* Shared between thread.c and synch.c. */
-	struct list_elem elem; /* List element. */
-	struct list_elem d_elem;
+    struct lock *wait_on_lock;
+    struct list donations; // 기부해준 스레드
+
+    /* Shared between thread.c and synch.c. */
+    struct list_elem elem; /* List element. */
+    struct list_elem d_elem;
+    struct list_elem th_elem; // thread_list
 
 #ifdef USERPROG
-	/* Owned by userprog/process.c. */
-	uint64_t *pml4; /* Page map level 4 */
+    /* Owned by userprog/process.c. */
+    uint64_t *pml4; /* Page map level 4 */
 
 #endif
 #ifdef VM
-	/* Table for whole virtual memory owned by thread. */
-	struct supplemental_page_table spt;
+    /* Table for whole virtual memory owned by thread. */
+    struct supplemental_page_table spt;
 #endif
 
-	/* Owned by thread.c. */
-	struct intr_frame tf; /* Information for switching */
-	unsigned magic;		  /* Detects stack overflow. */
-	int64_t wakeup_tick;  /* 쓰레드가 wake-up할 tick(local tick)*/
+    /* Owned by thread.c. */
+    struct intr_frame tf; /* Information for switching */
+    unsigned magic;       /* Detects stack overflow. */
+    int64_t wakeup_tick;  /* 쓰레드가 wake-up할 tick(local tick)*/
 };
 
 /* If false (default), use round-robin scheduler.
@@ -155,6 +159,13 @@ int thread_get_nice(void);
 void thread_set_nice(int);
 int thread_get_recent_cpu(void);
 int thread_get_load_avg(void);
+
+void calc_load_avg(void);
+void calc_all_recent_cpu(void);
+void calc_all_priority(void);
+int calc_recent_cpu(struct thread *th);
+int calc_one_priority(struct thread *t);
+void increase_recent_cpu(struct thread *th);
 
 void do_iret(struct intr_frame *tf);
 
