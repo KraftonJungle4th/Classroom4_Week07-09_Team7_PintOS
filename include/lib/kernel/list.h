@@ -86,24 +86,25 @@
 /* List element. */
 struct list_elem
 {
-   struct list_elem *prev; /* Previous list element. */
-   struct list_elem *next; /* Next list element. */
+    struct list_elem *prev; /* Previous list element. */
+    struct list_elem *next; /* Next list element. */
 };
 
 /* List. */
 struct list
 {
-   struct list_elem head; /* List head. */
-   struct list_elem tail; /* List tail. */
+    struct list_elem head; /* List head. */
+    struct list_elem tail; /* List tail. */
 };
 
 /* Converts pointer to list element LIST_ELEM into a pointer to
    the structure that LIST_ELEM is embedded inside.  Supply the
    name of the outer structure STRUCT and the member name MEMBER
    of the list element.  See the big comment at the top of the
-   file for an example. */
+   file for an example.
+   쓰레드 포인터로 변환해주는 전처리기 */
 #define list_entry(LIST_ELEM, STRUCT, MEMBER) \
-   ((STRUCT *)((uint8_t *)&(LIST_ELEM)->next - offsetof(STRUCT, MEMBER.next)))
+    ((STRUCT *)((uint8_t *)&(LIST_ELEM)->next - offsetof(STRUCT, MEMBER.next)))
 
 void list_init(struct list *);
 
@@ -154,6 +155,7 @@ void list_sort(struct list *,
                list_less_func *, void *aux);
 void list_insert_ordered(struct list *, struct list_elem *,
                          list_less_func *, void *aux);
+
 void list_unique(struct list *, struct list *duplicates,
                  list_less_func *, void *aux);
 
