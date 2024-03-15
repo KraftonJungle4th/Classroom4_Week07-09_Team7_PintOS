@@ -54,11 +54,11 @@ tid_t process_create_initd(const char *file_name)
         return TID_ERROR;
     strlcpy(fn_copy, file_name, PGSIZE);
 
-    for (token = strtok_r(fn_copy, " ", &save_ptr);
+    for (token = strtok_r(file_name, " ", &save_ptr);
          token != NULL;
          token = strtok_r(NULL, " ", &save_ptr))
     {
-        strlcpy(s[d], token, 128);
+        strlcpy(s[d], token, PGSIZE);
         d++;
     }
     file_name = s[0];
@@ -193,6 +193,8 @@ int process_exec(void *f_name)
     /* We first kill the current context */
     process_cleanup();
 
+    // printf("파일 이름 전체: %s \n\n", file_name);
+
     /* And then load the binary */
     success = load(file_name, &_if);
 
@@ -220,7 +222,7 @@ int process_wait(tid_t child_tid UNUSED)
     /* XXX: Hint) The pintos exit if process_wait (initd), we recommend you
      * XXX:       to add infinite loop here before
      * XXX:       implementing the process_wait. */
-    for (int i = 0; i = 1000000; i++)
+    for (int i = 0; i = 10000; i++)
     {
         continue;
     }
@@ -350,15 +352,33 @@ load(const char *file_name, struct intr_frame *if_)
     struct thread *t = thread_current();
     struct ELF ehdr;
     struct file *file = NULL;
+    char *token, *save_ptr;
+    char *argv[128];
+    int argc = 0;
     off_t file_ofs;
     bool success = false;
     int i;
+    int d = 0;
+
+    printf("file_name: %s \n\n", file_name);
 
     /* Allocate and activate page directory. */
     t->pml4 = pml4_create();
     if (t->pml4 == NULL)
         goto done;
     process_activate(thread_current());
+
+    for (token = strtok_r(file_name, " ", &save_ptr);
+         token != NULL;
+         token = strtok_r(NULL, " ", &save_ptr))
+    {
+        argv[argc] = token;
+        argc++;
+    }
+    file_name = argv[0];
+
+    // printf("argv에 들어온 파일 이름: %s \n\n", file_name);
+    // printf("argv에 들어온 인자 이름: %s \n\n", argv[1]);
 
     /* Open executable file. */
     file = filesys_open(file_name);
@@ -440,9 +460,14 @@ load(const char *file_name, struct intr_frame *if_)
 
     /* Start address. */
     if_->rip = ehdr.e_entry;
-
+    // printf("초기 rsp 위치: %x \n\n", if_->rsp);
+    // printf("초기 rdi 값: %d \n\n", if_->R.rdi);
     /* TODO: Your code goes here.
      * TODO: Implement argument passing (see project2/argument_passing.html). */
+
+    // printf("argv배열 실험 %s, %s \n\n", *argv, argv[0]);
+    push_stack(if_, argv, argc);
+    hex_dump(if_->rsp, if_->rsp, USER_STACK - (uint64_t)if_->rsp, true);
 
     success = true;
 
@@ -450,6 +475,35 @@ done:
     /* We arrive here whether the load is successful or not. */
     file_close(file);
     return success;
+}
+
+void push_stack(struct intr_frame *intr_f, char **argv, int argc)
+{
+    // printf("argv 배열 원소 %s, %s \n\n", argv[0], argv[1]);
+    // printf("argc 개수: %d \n\n", argc);
+
+    for (int i = argc - 1; i >= 0; i--) // 명령어 인자 데이터 넣기
+    {
+        size_t len = strlen(argv[i]) + 1;
+        intr_f->rsp -= len;
+        memcpy(intr_f->rsp, argv[i], len);
+    }
+    intr_f->rsp = intr_f->rsp - sizeof(uint8_t); // 스택 포인터를 8의 배수로 반올림
+    memset(intr_f->rsp, 0, sizeof(uint8_t));
+    intr_f->rsp = intr_f->rsp - sizeof(char *); // 스택 포인터를 8의 배수로 반올림
+    memset(intr_f->rsp, 0, sizeof(char *));
+    // printf("data push 이후 rsp값 %x \n\n", intr_f->rsp);
+    for (int j = argc - 1; j >= 0; j--)
+    {
+        intr_f->rsp -= sizeof(char *) * argc;
+        memcpy(intr_f->rsp, &argv[argc], sizeof(char *));
+    }
+    intr_f->rsp = intr_f->rsp - sizeof(void (*)()); // return할 함수가 있을 시 return address 설정
+    memset(intr_f->rsp, 0, sizeof(void (*)()));
+
+    intr_f->R.rsi = argv[0];
+    intr_f->R.rdi = argc;
+    // printf("address push 이후 rsp값 %x \n\n", intr_f->rsp);
 }
 
 /* Checks whether PHDR describes a valid, loadable segment in
