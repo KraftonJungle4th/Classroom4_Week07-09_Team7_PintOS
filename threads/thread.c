@@ -352,9 +352,8 @@ tid_t thread_create(const char *name, int priority,
 
     if (!list_empty(&ready_list) && list_entry(list_front(&ready_list), struct thread, elem)->priority > cur_priority)
     {
-        thread_yield();
+        thread_try_yield();
     }
-
     return tid;
 }
 
@@ -543,6 +542,15 @@ void thread_yield(void)
     intr_set_level(old_level);
 }
 
+void thread_try_yield(void)
+{
+    if (list_empty(&ready_list))
+        return;
+    struct thread *priority = list_entry(list_front(&ready_list), struct thread, elem);
+    if (thread_current()->priority < priority->priority && thread_current() != idle_thread)
+        thread_yield();
+}
+
 /* Sets the current thread's priority to NEW_PRIORITY.
    현재 스레드의 우선순위를 NEW_PRIORITY로 설정합니다. */
 void thread_set_priority(int new_priority)
@@ -586,7 +594,7 @@ void thread_set_nice(int nice) // UNUSED
     struct thread *t = thread_current();
     t->nice = nice;
     calc_one_priority(t);
-    // thread_yield();
+    thread_yield();
 }
 
 /* Returns the current thread's nice value.
@@ -626,7 +634,6 @@ void calc_all_priority(void)
     while (e != list_end(&thread_list)) // ready + block + running + sleep - idle   th_elem
     {
         struct thread *t = list_entry(e, struct thread, th_elem);
-        // t->original = t->priority = calc_one_priority(t);
         t->priority = calc_one_priority(t);
 
         e = e->next;
@@ -956,6 +963,7 @@ schedule(void)
 
     ASSERT(intr_get_level() == INTR_OFF);
     ASSERT(curr->status != THREAD_RUNNING);
+    ASSERT(next->magic == THREAD_MAGIC);
     ASSERT(is_thread(next));
     /* Mark us as running. */
     next->status = THREAD_RUNNING;
