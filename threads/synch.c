@@ -142,7 +142,8 @@ void sema_up(struct semaphore *sema)
     }
     sema->value++;
 
-    thread_yield(); // thread_preempt();
+    // thread_yield();
+    thread_try_yield();
     intr_set_level(old_level);
 }
 

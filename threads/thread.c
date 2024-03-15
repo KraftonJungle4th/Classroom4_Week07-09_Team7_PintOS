@@ -538,9 +538,16 @@ void thread_yield(void)
         // list_push_back(&ready_list, &curr->elem);
         list_insert_ordered(&ready_list, &curr->elem, priority, NULL);
     }
-
     do_schedule(THREAD_READY);
     intr_set_level(old_level);
+}
+
+void thread_try_yield(void)
+{
+    if (!intr_context() && !list_empty(&ready_list) && thread_current() != idle_thread)
+    {
+        thread_yield();
+    }
 }
 
 /* Sets the current thread's priority to NEW_PRIORITY.
