@@ -194,8 +194,6 @@ int process_exec(void *f_name)
     /* We first kill the current context */
     process_cleanup();
 
-    // printf("파일 이름 전체: %s \n\n", file_name);
-
     /* And then load the binary */
     success = load(file_name, &_if);
 
@@ -375,9 +373,6 @@ load(const char *file_name, struct intr_frame *if_)
     }
     file_name = argv[0];
 
-    // printf("argv에 들어온 파일 이름: %s \n\n", file_name);
-    // printf("argv에 들어온 인자 이름: %s \n\n", argv[1]);
-
     /* Open executable file. */
     file = filesys_open(file_name);
     if (file == NULL)
@@ -458,12 +453,10 @@ load(const char *file_name, struct intr_frame *if_)
 
     /* Start address. */
     if_->rip = ehdr.e_entry;
-    // printf("초기 rsp 위치: %x \n\n", if_->rsp);
-    // printf("초기 rdi 값: %d \n\n", if_->R.rdi);
+
     /* TODO: Your code goes here.
      * TODO: Implement argument passing (see project2/argument_passing.html). */
 
-    // printf("argv배열 실험 %s, %s \n\n", *argv, argv[0]);
     push_stack(if_, argv, argc);
     hex_dump(if_->rsp, if_->rsp, USER_STACK - (uint64_t)if_->rsp, true);
 
@@ -479,35 +472,23 @@ void push_stack(struct intr_frame *intr_f, char **argv, int argc)
 {
     char *addrv[128];
 
-    // printf("argv 배열 원소 %s, %s \n\n", argv[0], argv[1]);
-    // printf("argc 개수: %d \n\n", argc);
-
     for (int i = argc - 1; i >= 0; i--) // 명령어 인자 데이터 넣기
     {
         size_t len = strlen(argv[i]) + 1;
         intr_f->rsp -= len;
-        // printf("데이터 push rsp -> %llx \n\n", intr_f->rsp);
         memcpy((void *)intr_f->rsp, argv[i], len);
         addrv[i] = intr_f->rsp;
-        // printf("addrv에 넣은 주소: %x \n\n", addrv[i]);
     }
     intr_f->rsp = intr_f->rsp - sizeof(uint8_t *); // 스택 포인터를 8의 배수로 반올림
     memset((void *)intr_f->rsp, 0, sizeof(uint8_t *));
-    // printf("rsp 위치: %x \n\n", intr_f->rsp);
 
     intr_f->rsp = intr_f->rsp - sizeof(char *); // 스택 포인터를 8의 배수로 반올림
     memset((void *)intr_f->rsp, 0, sizeof(char *));
-    // printf("rsp 위치: %x \n\n", intr_f->rsp);
-    // printf("data push 이후 rsp값 %x \n\n", intr_f->rsp);
-    // printf("addrv[1]에 넣은 주소: %x \n\n", addrv[1]);
-    // printf("addrv[0]에 넣은 주소: %x \n\n", addrv[0]);
 
     for (int j = argc - 1; j >= 0; j--)
     {
         intr_f->rsp -= sizeof(char *);
-        // printf("addrv[j]에 넣은 주소: %x \n\n", addrv[j]);
         memcpy((void *)intr_f->rsp, &addrv[j], sizeof(char *));
-        // printf("주소 push rsp -> %llx \n\n", intr_f->rsp);
     }
 
     intr_f->rsp = intr_f->rsp - sizeof(void (*)()); // return할 함수가 있을 시 return address 설정
@@ -515,7 +496,6 @@ void push_stack(struct intr_frame *intr_f, char **argv, int argc)
 
     intr_f->R.rsi = argv[0];
     intr_f->R.rdi = argc;
-    // printf("address push 이후 rsp값 %x \n\n", intr_f->rsp);
 }
 
 /* Checks whether PHDR describes a valid, loadable segment in
