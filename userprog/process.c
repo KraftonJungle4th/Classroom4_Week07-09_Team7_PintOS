@@ -26,6 +26,7 @@ static void process_cleanup(void);
 static bool load(const char *file_name, struct intr_frame *if_);
 static void initd(void *f_name);
 static void __do_fork(void *);
+static void push_stack(struct intr_frame *intr_f, char **argv, int argc);
 
 /* General process initializer for initd and other process. */
 static void
@@ -358,9 +359,6 @@ load(const char *file_name, struct intr_frame *if_)
     off_t file_ofs;
     bool success = false;
     int i;
-    int d = 0;
-
-    printf("file_name: %s \n\n", file_name);
 
     /* Allocate and activate page directory. */
     t->pml4 = pml4_create();
@@ -479,6 +477,8 @@ done:
 
 void push_stack(struct intr_frame *intr_f, char **argv, int argc)
 {
+    char *addrv[128];
+
     // printf("argv 배열 원소 %s, %s \n\n", argv[0], argv[1]);
     // printf("argc 개수: %d \n\n", argc);
 
@@ -486,20 +486,32 @@ void push_stack(struct intr_frame *intr_f, char **argv, int argc)
     {
         size_t len = strlen(argv[i]) + 1;
         intr_f->rsp -= len;
-        memcpy(intr_f->rsp, argv[i], len);
+        // printf("데이터 push rsp -> %llx \n\n", intr_f->rsp);
+        memcpy((void *)intr_f->rsp, argv[i], len);
+        addrv[i] = intr_f->rsp;
+        // printf("addrv에 넣은 주소: %x \n\n", addrv[i]);
     }
-    intr_f->rsp = intr_f->rsp - sizeof(uint8_t); // 스택 포인터를 8의 배수로 반올림
-    memset(intr_f->rsp, 0, sizeof(uint8_t));
+    intr_f->rsp = intr_f->rsp - sizeof(uint8_t *); // 스택 포인터를 8의 배수로 반올림
+    memset((void *)intr_f->rsp, 0, sizeof(uint8_t *));
+    // printf("rsp 위치: %x \n\n", intr_f->rsp);
+
     intr_f->rsp = intr_f->rsp - sizeof(char *); // 스택 포인터를 8의 배수로 반올림
-    memset(intr_f->rsp, 0, sizeof(char *));
+    memset((void *)intr_f->rsp, 0, sizeof(char *));
+    // printf("rsp 위치: %x \n\n", intr_f->rsp);
     // printf("data push 이후 rsp값 %x \n\n", intr_f->rsp);
+    // printf("addrv[1]에 넣은 주소: %x \n\n", addrv[1]);
+    // printf("addrv[0]에 넣은 주소: %x \n\n", addrv[0]);
+
     for (int j = argc - 1; j >= 0; j--)
     {
-        intr_f->rsp -= sizeof(char *) * argc;
-        memcpy(intr_f->rsp, &argv[argc], sizeof(char *));
+        intr_f->rsp -= sizeof(char *);
+        // printf("addrv[j]에 넣은 주소: %x \n\n", addrv[j]);
+        memcpy((void *)intr_f->rsp, &addrv[j], sizeof(char *));
+        // printf("주소 push rsp -> %llx \n\n", intr_f->rsp);
     }
+
     intr_f->rsp = intr_f->rsp - sizeof(void (*)()); // return할 함수가 있을 시 return address 설정
-    memset(intr_f->rsp, 0, sizeof(void (*)()));
+    memset((void *)intr_f->rsp, 0, sizeof(void (*)()));
 
     intr_f->R.rsi = argv[0];
     intr_f->R.rdi = argc;
