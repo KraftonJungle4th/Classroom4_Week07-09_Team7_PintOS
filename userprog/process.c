@@ -95,7 +95,8 @@ duplicate_pte(uint64_t *pte, void *va, void *aux)
     bool writable;
 
     /* 1. TODO: If the parent_page is kernel page, then return immediately. */
-    // if (parent->){
+    // if (is_kernel_vaddr(va)) // 커널이면 즉시 리턴
+    // {
     //     return;
     // }
 
@@ -104,16 +105,26 @@ duplicate_pte(uint64_t *pte, void *va, void *aux)
 
     /* 3. TODO: Allocate new PAL_USER page for the child and set result to
      *    TODO: NEWPAGE. */
+    // newpage = palloc_get_page(PAL_USER);
 
     /* 4. TODO: Duplicate parent's page to the new page and
      *    TODO: check whether parent's page is writable or not (set WRITABLE
      *    TODO: according to the result). */
 
+    // memcpy(newpage, parent_page, PGSIZE);
+    // if (is_writable(&parent_page))
+    // {
+    //     writable = true;
+    // }
+    // else
+    //     writable = false;
+    // writable = false;
     /* 5. Add new page to child's page table at address VA with WRITABLE
      *    permission. */
     if (!pml4_set_page(current->pml4, va, newpage, writable))
     {
         /* 6. TODO: if fail to insert page, do error handling. */
+        // 페이지 폴트?
     }
     return true;
 }
@@ -129,9 +140,14 @@ __do_fork(void *aux)
     struct intr_frame if_;
     struct thread *parent = (struct thread *)aux;
     struct thread *current = thread_current();
-    /* TODO: somehow pass the parent_if. (i.e. process_fork()'s if_) */
+    /* TODO: somehow pass the parent_if. (i.e. process_fork()'s if_) 어떻게든 부모의 프레임을 가져와라? */
     struct intr_frame *parent_if;
     bool succ = true;
+
+    /*project 2 user memory*/
+    // parent_if = parent->tf;  <- 이게 안 된단다
+    // parent_if = &parent->user_tf;
+    /*project 2 user memory*/
 
     /* 1. Read the cpu context to local stack. */
     memcpy(&if_, parent_if, sizeof(struct intr_frame));
@@ -156,6 +172,11 @@ __do_fork(void *aux)
      * TODO:       in include/filesys/file.h. Note that parent should not return
      * TODO:       from the fork() until this function successfully duplicates
      * TODO:       the resources of parent.*/
+
+    /*project 2 user memory*/
+    // file_duplicate(file) 이거 써서 복사하기
+
+    /*project 2 user memory*/
 
     process_init();
 
@@ -192,7 +213,7 @@ int process_exec(void *f_name)
     /* And then load the binary */
     success = load(file_name, &_if);
 
-    hex_dump(_if.rsp, _if.rsp, USER_STACK - _if.rsp, true);
+    // hex_dump(_if.rsp, _if.rsp, USER_STACK - _if.rsp, true);
 
     /* If load failed, quit. */
     palloc_free_page(file_name);

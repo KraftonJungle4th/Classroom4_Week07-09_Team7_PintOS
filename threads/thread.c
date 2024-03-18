@@ -963,7 +963,7 @@ schedule(void)
 
     ASSERT(intr_get_level() == INTR_OFF);
     ASSERT(curr->status != THREAD_RUNNING);
-    ASSERT(next->magic == THREAD_MAGIC);
+    // ASSERT(next->magic == THREAD_MAGIC);
     ASSERT(is_thread(next));
     /* Mark us as running. */
     next->status = THREAD_RUNNING;

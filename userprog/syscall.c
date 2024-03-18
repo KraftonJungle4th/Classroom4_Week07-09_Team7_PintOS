@@ -7,9 +7,11 @@
 #include "userprog/gdt.h"
 #include "threads/flags.h"
 #include "intrinsic.h"
+//
+#include "threads/init.h"
 
-void syscall_entry (void);
-void syscall_handler (struct intr_frame *);
+void syscall_entry(void);
+void syscall_handler(struct intr_frame *);
 
 /* System call.
  *
@@ -24,23 +26,89 @@ void syscall_handler (struct intr_frame *);
 #define MSR_LSTAR 0xc0000082        /* Long mode SYSCALL target */
 #define MSR_SYSCALL_MASK 0xc0000084 /* Mask for the eflags */
 
-void
-syscall_init (void) {
-	write_msr(MSR_STAR, ((uint64_t)SEL_UCSEG - 0x10) << 48  |
-			((uint64_t)SEL_KCSEG) << 32);
-	write_msr(MSR_LSTAR, (uint64_t) syscall_entry);
+void syscall_init(void)
+{
+    write_msr(MSR_STAR, ((uint64_t)SEL_UCSEG - 0x10) << 48 |
+                            ((uint64_t)SEL_KCSEG) << 32);
+    write_msr(MSR_LSTAR, (uint64_t)syscall_entry);
 
-	/* The interrupt service rountine should not serve any interrupts
-	 * until the syscall_entry swaps the userland stack to the kernel
-	 * mode stack. Therefore, we masked the FLAG_FL. */
-	write_msr(MSR_SYSCALL_MASK,
-			FLAG_IF | FLAG_TF | FLAG_DF | FLAG_IOPL | FLAG_AC | FLAG_NT);
+    /* The interrupt service rountine should not serve any interrupts
+     * until the syscall_entry swaps the userland stack to the kernel
+     * mode stack. Therefore, we masked the FLAG_FL. */
+    write_msr(MSR_SYSCALL_MASK,
+              FLAG_IF | FLAG_TF | FLAG_DF | FLAG_IOPL | FLAG_AC | FLAG_NT);
 }
 
 /* The main system call interface */
-void
-syscall_handler (struct intr_frame *f UNUSED) {
-	// TODO: Your implementation goes here.
-	printf ("system call!\n");
-	thread_exit ();
+void syscall_handler(struct intr_frame *f) // UNUSED)
+{
+    // TODO: Your implementation goes here.
+    int64_t call_num = f->R.rax;
+
+    // printf("system call!\n");
+
+    switch (call_num)
+    {
+    case SYS_HALT:
+        // printf("halt\n");
+        halt();
+        break;
+    case SYS_EXIT:
+        break;
+    case SYS_FORK:
+        break;
+    case SYS_EXEC:
+        break;
+    case SYS_WAIT:
+        break;
+    case SYS_CREATE:
+        break;
+    case SYS_REMOVE:
+        break;
+    case SYS_OPEN:
+        break;
+    case SYS_FILESIZE:
+        break;
+    case SYS_READ:
+        break;
+    case SYS_WRITE:
+        write(f->R.rdi, f->R.rsi, f->R.rdx);
+        break;
+    case SYS_SEEK:
+        break;
+    case SYS_TELL:
+        break;
+    case SYS_CLOSE:
+        break;
+    default:
+        break;
+        /* project 2 */
+    }
+    // thread_exit();
+}
+
+// bool check_addr(struct intr_frame *if_) // 또는 addr
+// {
+// }
+
+void halt(void)
+{
+    power_off();
+}
+
+int write(int fd, const void *buffer, unsigned size)
+{
+    struct thread *t = thread_current();
+
+    int write_size = size;
+
+    if (fd == 1) // STD_OUT
+    {
+        putbuf(buffer, size);
+    }
+    else
+    {
+        }
+
+    return write_size;
 }

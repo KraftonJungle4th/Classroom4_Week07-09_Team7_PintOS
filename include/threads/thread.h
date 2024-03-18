@@ -115,6 +115,11 @@ struct thread
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint64_t *pml4; /* Page map level 4 */
+    struct intr_frame user_tf;
+    struct list_elem ch_elem; // child
+    struct list child_list;
+
+    struct file *fd_table[64];
 
 #endif
 #ifdef VM
