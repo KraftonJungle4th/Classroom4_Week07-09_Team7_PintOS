@@ -458,7 +458,7 @@ load(const char *file_name, struct intr_frame *if_)
      * TODO: Implement argument passing (see project2/argument_passing.html). */
 
     push_stack(if_, argv, argc);
-    hex_dump(if_->rsp, if_->rsp, USER_STACK - (uint64_t)if_->rsp, true);
+    // hex_dump(if_->rsp, if_->rsp, USER_STACK - (uint64_t)if_->rsp, true);
 
     success = true;
 
@@ -494,8 +494,8 @@ void push_stack(struct intr_frame *intr_f, char **argv, int argc)
     intr_f->rsp = intr_f->rsp - sizeof(void (*)()); // return할 함수가 있을 시 return address 설정
     memset((void *)intr_f->rsp, 0, sizeof(void (*)()));
 
-    intr_f->R.rsi = argv[0];
     intr_f->R.rdi = argc;
+    intr_f->R.rsi = intr_f->rsp + 8;
 }
 
 /* Checks whether PHDR describes a valid, loadable segment in
