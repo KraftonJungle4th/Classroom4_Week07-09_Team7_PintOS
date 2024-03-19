@@ -1,4 +1,5 @@
 #include "userprog/syscall.h"
+#include "filesys/filesys.h"
 #include <stdio.h>
 #include <syscall-nr.h>
 #include "threads/interrupt.h"
@@ -8,9 +9,24 @@
 #include "threads/flags.h"
 #include "intrinsic.h"
 #include "threads/init.h"
+#include "user/syscall.h"
 
 void syscall_entry(void);
 void syscall_handler(struct intr_frame *);
+void halt(void);
+void exit(int status);
+// pid_t fork(const char *thread_name);
+int exec(const char *cmd_line);
+// int wait(pid_t pid);
+bool create(const char *file, unsigned initial_size);
+bool remove(const char *file);
+int open(const char *file);
+int filesize(int fd);
+int read(int fd, void *buffer, unsigned size);
+int write(int fd, const void *buffer, unsigned size);
+void seek(int fd, unsigned position);
+unsigned tell(int fd);
+void close(int fd);
 
 /* System call.
  *
@@ -42,9 +58,11 @@ void syscall_init(void)
 void syscall_handler(struct intr_frame *f UNUSED)
 {
     // TODO: Your implementation goes here.
-    printf("system call!\n");
+    // printf("system call!\n");
     // printf("system call number: %d \n", f->R.rax);
     check_address(f);
+
+    // 인자 들어오는 순서 %rdi, %rsi, %rdx, %r10, %r8, %r9
 
     switch (f->R.rax)
     {
@@ -54,31 +72,34 @@ void syscall_handler(struct intr_frame *f UNUSED)
     case SYS_EXIT:
         exit(f->R.rdi);
         break;
+    case SYS_FORK:
+        break;
     case SYS_EXEC:
+        f->R.rax = exec(f->R.rdi);
         break;
     case SYS_WAIT:
         break;
     case SYS_CREATE:
-        break;
+        f->R.rax = create(f->R.rdi, f->R.rsi);
     case SYS_REMOVE:
-        break;
+        remove(f->R.rdi);
     case SYS_OPEN:
-        break;
+        open(f->R.rdi);
     case SYS_FILESIZE:
-        break;
+        filesize(f->R.rdi);
     case SYS_READ:
-        break;
+        read(f->R.rdi, f->R.rsi, f->R.rdx);
     case SYS_WRITE:
+        f->R.rax = write(f->R.rdi, f->R.rsi, f->R.rdx);
         break;
     case SYS_SEEK:
-        break;
+        seek(f->R.rdi, f->R.rsi);
     case SYS_TELL:
-        break;
+        tell(f->R.rdi);
     case SYS_CLOSE:
-        break;
-    case SYS_MMAP:
-        break;
+        close(f->R.rdi);
     }
+    thread_exit();
 }
 
 void check_address(struct intr_frame *intr_f)
@@ -88,32 +109,103 @@ void check_address(struct intr_frame *intr_f)
 
     if (is_kernel_vaddr(intr_f->rsp))
     {
-        // printf("requested address is kernel's address \n");
         exit(-1);
     }
     if (intr_f->rsp == NULL)
     {
-        // printf("requested address is NULL \n");
         exit(-1);
     }
     if (pml4_get_page(thread_current()->pml4, intr_f->rsp) == NULL)
     {
-        // printf("requested address is not mapped \n");
         exit(-1);
-    }
-    else
-    {
-        // printf("syscall request is valid, moving on to syscall handler... \n");
     }
 }
 
 void exit(int status)
 {
     printf("%s: exit(%d)\n", thread_current()->name, status);
+    thread_current()->exit_status = status;
     thread_exit();
 }
 
 void halt(void)
 {
     power_off();
+}
+
+int exec(const char *file)
+{
+    return process_exec(file);
+}
+
+int wait(pid_t pid)
+{
+    return process_wait(pid);
+}
+
+bool create(const char *file, unsigned initial_size)
+{
+    if (filesys_create(file, initial_size) == true)
+    {
+        return true;
+    }
+    else
+        return false;
+}
+
+bool remove(const char *file)
+{
+    if (filesys_remove(file))
+    {
+        return true;
+    }
+    else
+        return false;
+}
+
+int open(const char *file)
+{
+    check_address(file);
+    struct file *f = filesys_open(file);
+    if (f == NULL)
+    {
+        return -1;
+    }
+    else
+    {
+        thread_current()->fdt[2] = f;
+    }
+}
+
+int filesize(int fd)
+{
+}
+
+int read(int fd, void *buffer, unsigned size)
+{
+}
+
+int write(int fd, const void *buffer, unsigned size)
+{
+    if (fd == 1)
+    {
+        putbuf(buffer, size);
+        return size;
+    }
+    else
+    {
+        return -1;
+    }
+}
+
+void seek(int fd, unsigned position)
+{
+}
+
+unsigned tell(int fd)
+{
+}
+
+void close(int fd)
+{
 }

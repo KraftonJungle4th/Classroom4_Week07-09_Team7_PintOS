@@ -793,6 +793,7 @@ init_thread(struct thread *t, const char *name, int priority)
     list_init(&t->donations);
     t->nice = 0;
     t->recent_cpu = 0;
+    t->exit_status = 0;
 
     if (strcmp(name, "idle"))
         list_push_back(&thread_list, &t->th_elem);

@@ -126,6 +126,8 @@ struct thread
     struct intr_frame tf; /* Information for switching */
     unsigned magic;       /* Detects stack overflow. */
     int64_t wakeup_tick;  /* 쓰레드가 wake-up할 tick(local tick)*/
+    struct file *fdt[128];
+    int exit_status; /* exit status */
 };
 
 /* If false (default), use round-robin scheduler.
