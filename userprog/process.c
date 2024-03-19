@@ -43,7 +43,7 @@ process_init(void)
 tid_t process_create_initd(const char *file_name)
 {
     char *fn_copy;
-    char s[128][14];
+    char s[128][15];
     char *token, *save_ptr;
     int d = 0;
     tid_t tid;
@@ -281,6 +281,20 @@ void process_activate(struct thread *next)
     tss_update(next);
 }
 
+int process_add_file(struct file *f)
+{
+    struct thread *t = thread_current();
+    for (int i = 2; i < 128; i++)
+    {
+        if (t->fdt[i] == NULL)
+        {
+            t->fdt[i] = f;
+            return i;
+        }
+        return -1;
+    }
+}
+
 /* We load ELF binaries.  The following definitions are taken
  * from the ELF specification, [ELF1], more-or-less verbatim.  */
 
@@ -480,10 +494,15 @@ void push_stack(struct intr_frame *intr_f, char **argv, int argc)
         memcpy((void *)intr_f->rsp, argv[i], len);
         addrv[i] = intr_f->rsp;
     }
-    intr_f->rsp = intr_f->rsp - sizeof(uint8_t *); // 스택 포인터를 8의 배수로 반올림
-    memset((void *)intr_f->rsp, 0, sizeof(uint8_t *));
 
-    intr_f->rsp = intr_f->rsp - sizeof(char *); // 스택 포인터를 8의 배수로 반올림
+    // 스택 포인터를 8의 배수로 반올림
+    if (intr_f->rsp % 8 != 0)
+    {
+        intr_f->rsp -= intr_f->rsp % 8;
+    }
+    memset((void *)intr_f->rsp, 0, intr_f->rsp - (uint64_t)intr_f->rsp);
+
+    intr_f->rsp = intr_f->rsp - sizeof(char *);
     memset((void *)intr_f->rsp, 0, sizeof(char *));
 
     for (int j = argc - 1; j >= 0; j--)

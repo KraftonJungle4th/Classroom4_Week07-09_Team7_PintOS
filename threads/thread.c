@@ -97,6 +97,7 @@ static struct list thread_list;
 #define TOINT(x) (x >= 0) ? ((x + ((1 << FIXED) >> 1)) >> FIXED) : ((x - ((1 << FIXED) >> 1)) >> FIXED)
 #define TOINT_ZERO(x) ((x) >> FIXED)
 #define TOFIX(x) (x << FIXED)
+#define FDT_PAGES 2
 
 static void kernel_thread(thread_func *, void *aux);
 
@@ -342,6 +343,11 @@ tid_t thread_create(const char *name, int priority,
     t->tf.ss = SEL_KDSEG;
     t->tf.cs = SEL_KCSEG;
     t->tf.eflags = FLAG_IF;
+
+    for (int i = 0; i < 128; i++)
+    {
+        thread_current()->fdt[i] = NULL;
+    }
 
     /* Add to run queue.
        실행 큐에 추가 */
@@ -794,6 +800,7 @@ init_thread(struct thread *t, const char *name, int priority)
     t->nice = 0;
     t->recent_cpu = 0;
     t->exit_status = 0;
+    t->next_fd = 2;
 
     if (strcmp(name, "idle"))
         list_push_back(&thread_list, &t->th_elem);
