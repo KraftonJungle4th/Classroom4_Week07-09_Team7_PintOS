@@ -81,25 +81,33 @@ void syscall_handler(struct intr_frame *f UNUSED)
         break;
     case SYS_CREATE:
         f->R.rax = create(f->R.rdi, f->R.rsi);
+        break;
     case SYS_REMOVE:
         remove(f->R.rdi);
+        break;
     case SYS_OPEN:
         open(f->R.rdi);
+        break;
     case SYS_FILESIZE:
         filesize(f->R.rdi);
+        break;
     case SYS_READ:
         read(f->R.rdi, f->R.rsi, f->R.rdx);
+        break;
     case SYS_WRITE:
         f->R.rax = write(f->R.rdi, f->R.rsi, f->R.rdx);
         break;
     case SYS_SEEK:
         seek(f->R.rdi, f->R.rsi);
+        break;
     case SYS_TELL:
         tell(f->R.rdi);
+        break;
     case SYS_CLOSE:
         close(f->R.rdi);
+        break;
     }
-    thread_exit();
+    // thread_exit();
 }
 
 void check_address(struct intr_frame *intr_f)
@@ -124,7 +132,7 @@ void check_address(struct intr_frame *intr_f)
 void exit(int status)
 {
     printf("%s: exit(%d)\n", thread_current()->name, status);
-    thread_current()->exit_status = status;
+    // thread_current()->exit_status = status;
     thread_exit();
 }
 
