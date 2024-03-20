@@ -302,6 +302,7 @@ int process_wait(tid_t child_tid) // UNUSED)
     sema_down(&status->exit_wait);
     list_remove(&status->ch_elem);
     // printf("ww ee tid %d\n", thread_current()->tid);
+    sema_up(&status->load_wait);
     return status->exit_status;
 }
 
@@ -318,8 +319,10 @@ void process_exit(void)
     //     close(i);
     // }
     // printf("exex tid %d\n", curr->tid);
+    file_close(curr->running);
     sema_up(&curr->exit_wait);
     // printf("exit sema up\n");
+    sema_down(&curr->load_wait);
     process_cleanup();
 }
 
@@ -528,6 +531,9 @@ load(const char *file_name, struct intr_frame *if_)
         }
     }
 
+    t->running = file;
+    file_deny_write(file);
+
     /* Set up stack. */
     if (!setup_stack(if_))
         goto done;
@@ -544,7 +550,7 @@ load(const char *file_name, struct intr_frame *if_)
 
 done:
     /* We arrive here whether the load is successful or not. */
-    file_close(file);
+    // file_close(file);
 
     return success;
 }
