@@ -11,6 +11,9 @@
 #include "threads/init.h"
 #include "filesys/filesys.h"
 #include "filesys/file.h"
+#include "threads/synch.h"
+#include "threads/palloc.h"
+#include <string.h>
 
 void syscall_entry(void);
 void syscall_handler(struct intr_frame *);
@@ -28,6 +31,8 @@ void syscall_handler(struct intr_frame *);
 #define MSR_LSTAR 0xc0000082        /* Long mode SYSCALL target */
 #define MSR_SYSCALL_MASK 0xc0000084 /* Mask for the eflags */
 
+static struct lock file_lock;
+
 void syscall_init(void)
 {
     write_msr(MSR_STAR, ((uint64_t)SEL_UCSEG - 0x10) << 48 |
@@ -39,6 +44,8 @@ void syscall_init(void)
      * mode stack. Therefore, we masked the FLAG_FL. */
     write_msr(MSR_SYSCALL_MASK,
               FLAG_IF | FLAG_TF | FLAG_DF | FLAG_IOPL | FLAG_AC | FLAG_NT);
+
+    lock_init(&file_lock);
 }
 
 /* The main system call interface */
@@ -60,15 +67,19 @@ void syscall_handler(struct intr_frame *f) // UNUSED)
         exit(f->R.rdi);
         break;
     case SYS_FORK:
+        f->R.rax = fork(f->R.rdi, f);
         break;
     case SYS_EXEC:
+        f->R.rax = exec(f->R.rdi);
         break;
     case SYS_WAIT:
+        f->R.rax = wait(f->R.rdi);
         break;
     case SYS_CREATE:
         f->R.rax = create(f->R.rdi, f->R.rsi);
         break;
     case SYS_REMOVE:
+        f->R.rax = remove(f->R.rdi);
         break;
     case SYS_OPEN:
         f->R.rax = open(f->R.rdi);
@@ -113,13 +124,52 @@ void halt(void)
 
 void exit(int status)
 {
-    printf("%s: exit(%d)\n", thread_current()->name, status);
+    // printf("eeee %s: exit(%d)\n", thread_current()->name, status);
+
+    thread_current()->exit_status = status;
+    printf("%s: exit(%d)\n", thread_current()->name, thread_current()->exit_status);
     thread_exit();
 }
 
-pid_t fork(const char *thread_name)
+pid_t fork(const char *thread_name, struct intr_frame *if_)
 {
-    // process_fork(thread_name, if);
+    pid_t pid = 0;
+    // struct thread *curr = thread_current();
+
+    // curr->user_if.R.rbx = curr->tf.R.rbx;
+    // curr->user_if.rsp = curr->tf.rsp;
+    // curr->user_if.R.rbp = curr->tf.R.rbp;
+    // curr->user_if.R.r12 = curr->tf.R.r12;
+    // curr->user_if.R.r13 = curr->tf.R.r13;
+    // curr->user_if.R.r14 = curr->tf.R.r14;
+    // curr->user_if.R.r15 = curr->tf.R.r15;
+    // printf("rsp %llx \n", if_->rsp);
+    // printf("sys fork tid %d\n", curr->tid);
+
+    pid = process_fork(thread_name, if_); // 자식 프로세스의 pid를 반환
+
+    return pid;
+}
+
+int exec(const char *cmd_line)
+{
+    // return process_create_initd(cmd_line);
+    check_addr(cmd_line);
+
+    char *name;
+    name = palloc_get_page(0);
+    if (name == NULL)
+        exit(-1);
+    strlcpy(name, cmd_line, PGSIZE);
+    printf("input %s\n", name);
+
+    if (process_exec(name) == -1)
+        return -1;
+}
+
+int wait(pid_t pid)
+{
+    return process_wait(pid);
 }
 
 bool create(const char *file, unsigned initial_size)
@@ -142,10 +192,17 @@ int open(const char *file)
     struct file **table = t->fd_table;
     struct file *open_file = NULL;
     int index = -1;
+
+    lock_acquire(&file_lock);
+
     open_file = filesys_open(file);
 
     if (open_file == NULL)
+    {
+        lock_release(&file_lock);
         return index;
+    }
+
     for (int i = 2; i < 128; i++)
     {
         if (table[i] == NULL)
@@ -155,6 +212,7 @@ int open(const char *file)
             break;
         }
     }
+    lock_release(&file_lock);
     return index;
 }
 
@@ -211,18 +269,23 @@ int write(int fd, const void *buffer, unsigned size)
     check_addr(buffer);
 
     if (fd < 0 || fd > 128)
+    {
         return -1;
+    }
+
     if (fd == 1) // STD_OUT
     {
         putbuf(buffer, size);
     }
     else
     {
+        lock_acquire(&file_lock);
         if (table[fd] != NULL)
         {
             write_file = table[fd];
             write_size = file_write_at(write_file, buffer, size, 0);
         }
+        lock_release(&file_lock);
     }
 
     return write_size;
@@ -242,6 +305,8 @@ void seek(int fd, unsigned position)
     else
         exit(-1); // return;
 
+    if (filesize(fd) < position)
+        exit(-1);
     file_seek(open_file, position); // position > filesize 면 에러
 }
 
@@ -271,9 +336,14 @@ void close(int fd)
     if (fd == 1 || fd == 0 || fd > 128)
         exit(-1); // return;
 
+    // for(struct list_elem e = list_begin(&table); e != list_tail(&table); e = list_next(e)){
+    //     struct fd _fd = list_entry(e, struct fd, fd_elem);
+
+    // }
     if (table[fd] != NULL)
     {
         open_file = table[fd];
         table[fd] = NULL;
+        file_close(open_file);
     }
 }

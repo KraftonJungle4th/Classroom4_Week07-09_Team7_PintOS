@@ -12,8 +12,11 @@ bool check_addr(void *addr);
 
 void halt(void);
 void exit(int status);
+int wait(pid_t pid);
 bool create(const char *file, unsigned initial_size);
-pid_t fork(const char *thread_name);
+bool remove(const char *file);
+// pid_t fork(const char *thread_name, struct intr_frame *if_);
+int exec(const char *cmd_line);
 int open(const char *file);
 int filesize(int fd);
 int read(int fd, void *buffer, unsigned size);
