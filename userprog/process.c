@@ -268,17 +268,20 @@ int process_exec(void *f_name)
  * does nothing. */
 static struct thread *get_child(tid_t tid)
 {
-    struct list child_list = thread_current()->child_list;
+    struct list *child_list = &thread_current()->child_list;
     struct list_elem *e;
 
     if (list_empty(&child_list))
         return NULL;
-    for (e = list_begin(&child_list); e != list_end(&child_list); e = list_next(e))
+
+    for (e = list_begin(child_list); e != list_end(child_list); e = list_next(e))
     {
         struct thread *child = list_entry(e, struct thread, ch_elem);
         // printf("get child tid %d  parent tid %d\n", child->tid, child->parent->tid);
         if (thread_current()->tid != child->parent->tid)
+        {
             break;
+        }
 
         if (child->tid == tid)
         {
@@ -286,6 +289,7 @@ static struct thread *get_child(tid_t tid)
             return child;
         }
     }
+    // printf("dddddd\n");
     return NULL;
 }
 
@@ -298,7 +302,11 @@ int process_wait(tid_t child_tid) // UNUSED)
     struct thread *status = get_child(child_tid);
     // printf("ww ss tid %d  child %d\n", thread_current()->tid, status->tid);
     if (status == NULL)
+    {
+        // printf("NULL\n");
         return -1;
+    }
+
     sema_down(&status->exit_wait);
     list_remove(&status->ch_elem);
     // printf("ww ee tid %d\n", thread_current()->tid);

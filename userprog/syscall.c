@@ -167,8 +167,10 @@ int wait(pid_t pid)
 bool create(const char *file, unsigned initial_size)
 {
     check_addr(file);
-
-    return filesys_create(file, initial_size);
+    lock_acquire(&file_lock);
+    bool succ = filesys_create(file, initial_size);
+    lock_release(&file_lock);
+    return succ; // filesys_create(file, initial_size);
 }
 
 bool remove(const char *file)
@@ -185,10 +187,12 @@ int open(const char *file)
     struct file *open_file = NULL;
     int fd = 2;
 
+    lock_acquire(&file_lock);
     open_file = filesys_open(file);
 
     if (open_file == NULL)
     {
+        lock_release(&file_lock);
         return -1;
     }
 
@@ -203,10 +207,13 @@ int open(const char *file)
         fd++;
     }
     if (fd >= 128)
+    {
+        lock_release(&file_lock);
         return -1;
+    }
 
     table[fd] = open_file;
-    // lock_release(&open_lock);
+    lock_release(&file_lock);
     return fd;
 }
 
@@ -231,7 +238,8 @@ int read(int fd, void *buffer, unsigned size)
     struct thread *t = thread_current();
     struct file **table = t->fd_table;
     struct file *open_file;
-    int ret = -1;
+    int ret = 0;
+    char *ptr = (char *)buffer;
 
     check_addr(buffer);
 
@@ -239,17 +247,27 @@ int read(int fd, void *buffer, unsigned size)
         return -1;
     if (table[fd] == NULL)
         return -1;
-
+    if (fd == 1)
+        return 0;
     lock_acquire(&file_lock);
     if (fd == 0)
     {
-        ret = input_getc();
+        for (int i = 0; i < size; i++)
+        {
+            *ptr++ = input_getc();
+            ret++;
+        }
+
         lock_release(&file_lock);
     }
     else
     {
         open_file = table[fd];
-
+        if (open_file == NULL)
+        {
+            lock_release(&file_lock);
+            return -1;
+        }
         ret = file_read(open_file, buffer, size);
         lock_release(&file_lock);
     }
@@ -262,7 +280,7 @@ int write(int fd, const void *buffer, unsigned size)
     struct thread *t = thread_current();
     struct file **table = t->fd_table;
     struct file *write_file;
-    int write_size = -1;
+    int write_size = 0;
 
     check_addr(buffer);
 
@@ -270,19 +288,21 @@ int write(int fd, const void *buffer, unsigned size)
     {
         return -1;
     }
-
+    if (fd == 0)
+        return 0;
     if (fd == 1) // STD_OUT
     {
         putbuf(buffer, size);
+        write_size = size;
     }
     else
     {
-
         if (table[fd] != NULL)
         {
             write_file = table[fd];
             lock_acquire(&file_lock);
-            write_size = file_write_at(write_file, buffer, size, 0);
+            // write_size = file_write_at(write_file, buffer, size, 0);
+            write_size = file_write(write_file, buffer, size);
             lock_release(&file_lock);
         }
     }
