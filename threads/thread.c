@@ -343,6 +343,10 @@ tid_t thread_create(const char *name, int priority,
     t->tf.cs = SEL_KCSEG;
     t->tf.eflags = FLAG_IF;
 
+    t->fd_table = palloc_get_page(PAL_ZERO & PAL_ASSERT);
+    t->fd_table[0] = 1;
+    t->fd_table[1] = 2;
+
     /* Add to run queue.
        실행 큐에 추가 */
     thread_unblock(t);
@@ -547,10 +551,10 @@ void thread_yield(void)
 
 void thread_try_yield(void)
 {
-    if (list_empty(&ready_list))
+    if (list_empty(&ready_list) || thread_current() == idle_thread)
         return;
     struct thread *priority = list_entry(list_front(&ready_list), struct thread, elem);
-    if (thread_current()->priority < priority->priority && thread_current() != idle_thread)
+    if (thread_current()->priority < priority->priority)
         thread_yield();
 }
 

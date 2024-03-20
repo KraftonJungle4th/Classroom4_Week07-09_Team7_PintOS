@@ -161,10 +161,12 @@ int exec(const char *cmd_line)
     if (name == NULL)
         exit(-1);
     strlcpy(name, cmd_line, PGSIZE);
-    printf("input %s\n", name);
+    // printf("input %s\n", name);
 
     if (process_exec(name) == -1)
         return -1;
+
+    // return 0;
 }
 
 int wait(pid_t pid)
@@ -203,7 +205,7 @@ int open(const char *file)
         return index;
     }
 
-    for (int i = 2; i < 128; i++)
+    for (int i = 2; i < 64; i++)
     {
         if (table[i] == NULL)
         {
@@ -241,7 +243,7 @@ int read(int fd, void *buffer, unsigned size)
 
     check_addr(buffer);
 
-    if (fd > 128 || fd < 0)
+    if (fd > 64 || fd < 0)
         return -1;
     if (table[fd] == NULL)
         return -1;
@@ -268,7 +270,7 @@ int write(int fd, const void *buffer, unsigned size)
 
     check_addr(buffer);
 
-    if (fd < 0 || fd > 128)
+    if (fd < 0 || fd > 64)
     {
         return -1;
     }
@@ -297,7 +299,7 @@ void seek(int fd, unsigned position)
     struct file **table = t->fd_table;
     struct file *open_file;
 
-    if (fd < 0 || fd > 128)
+    if (fd < 0 || fd > 64)
         exit(-1); // return;
 
     if (table[fd] != NULL)
@@ -316,7 +318,7 @@ unsigned tell(int fd)
     struct file **table = t->fd_table;
     struct file *open_file;
 
-    if (fd < 0 || fd > 128)
+    if (fd < 0 || fd > 64)
         return -1;
 
     if (table[fd] != NULL)
@@ -333,7 +335,7 @@ void close(int fd)
     struct file **table = t->fd_table;
     struct file *open_file;
 
-    if (fd == 1 || fd == 0 || fd > 128)
+    if (fd == 1 || fd == 0 || fd > 64)
         exit(-1); // return;
 
     // for(struct list_elem e = list_begin(&table); e != list_tail(&table); e = list_next(e)){
