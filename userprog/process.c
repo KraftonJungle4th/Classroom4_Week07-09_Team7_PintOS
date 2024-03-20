@@ -46,7 +46,6 @@ static void process_init(void)
  * Notice that THIS SHOULD BE CALLED ONCE. */
 tid_t process_create_initd(const char *file_name)
 {
-    // printf("create initd tid : %d\n", thread_current()->tid);
     char *fn_copy, *save;
     tid_t tid;
 
@@ -83,8 +82,6 @@ initd(void *f_name)
     if (process_exec(f_name) < 0)
         PANIC("Fail to launch initd\n");
 
-    // sema_down(&main_thread->load_wait);
-
     NOT_REACHED();
 }
 
@@ -104,8 +101,9 @@ tid_t process_fork(const char *name, struct intr_frame *if_) // UNUSED)
     struct thread *child = get_child(tid);
     if (child == NULL)
         return TID_ERROR;
-
+    // printf("call fork %d  chile fork %d\n", curr->tid, child->tid);
     sema_down(&child->fork_wait);
+    // printf("fork sema down done\n");
 
     return tid;
 }
@@ -195,28 +193,23 @@ __do_fork(void *aux)
     // file_duplicate(file) 이거 써서 복사하기
     struct file **table = parent->fd_table;
     struct file **child_tb = current->fd_table;
+    struct file *dup_file;
     int index = 2;
-    /*
-    for (int i = 2; i < 64; i++)
-    {
-        struct file *dufile = table[i];
-        if (dufile != NULL)
-            child_tb[i] = file_duplicate(dufile);
-    }
-    */
 
     child_tb[0] = table[0];
     child_tb[1] = table[1];
 
-    while (index < PGSIZE)
+    while (index < 128)
     {
         if (table[index] != NULL)
         {
-            child_tb[index] = file_duplicate(table[index]);
+            dup_file = table[index];
+            child_tb[index] = file_duplicate(dup_file);
         }
+
         index++;
     }
-    printf("fofofo\n");
+
     /*project 2 user memory*/
     sema_up(&current->fork_wait);
     process_init();
@@ -276,12 +269,20 @@ int process_exec(void *f_name)
 static struct thread *get_child(tid_t tid)
 {
     struct list child_list = thread_current()->child_list;
+    struct list_elem *e;
 
-    for (struct list_elem *e = list_begin(&child_list); e != list_tail(&child_list); e = list_next(e))
+    if (list_empty(&child_list))
+        return NULL;
+    for (e = list_begin(&child_list); e != list_end(&child_list); e = list_next(e))
     {
         struct thread *child = list_entry(e, struct thread, ch_elem);
+        // printf("get child tid %d  parent tid %d\n", child->tid, child->parent->tid);
+        if (thread_current()->tid != child->parent->tid)
+            break;
+
         if (child->tid == tid)
         {
+            // printf("search child tid %d  parent tid %d\n", child->tid, child->parent->tid);
             return child;
         }
     }
@@ -290,18 +291,17 @@ static struct thread *get_child(tid_t tid)
 
 int process_wait(tid_t child_tid) // UNUSED)
 {
-    // printf("wait tid : %d  child %d\n", thread_current()->tid, child_tid);
     /* XXX: Hint) The pintos exit if process_wait (initd), we recommend you
      * XXX:       to add infinite loop here before
      * XXX:       implementing the process_wait. */
 
     struct thread *status = get_child(child_tid);
-    printf("ww ss tid %d  child %d\n", thread_current()->tid, status->tid);
+    // printf("ww ss tid %d  child %d\n", thread_current()->tid, status->tid);
     if (status == NULL)
         return -1;
     sema_down(&status->exit_wait);
     list_remove(&status->ch_elem);
-    printf("ww ee\n");
+    // printf("ww ee tid %d\n", thread_current()->tid);
     return status->exit_status;
 }
 
@@ -317,8 +317,9 @@ void process_exit(void)
     //{
     //     close(i);
     // }
-    printf("exex\n");
+    // printf("exex tid %d\n", curr->tid);
     sema_up(&curr->exit_wait);
+    // printf("exit sema up\n");
     process_cleanup();
 }
 
@@ -536,11 +537,9 @@ load(const char *file_name, struct intr_frame *if_)
 
     /* TODO: Your code goes here.
      * TODO: Implement argument passing (see project2/argument_passing.html). ???;;;;*/
-    // printf("rsp %llx\n", if_->rsp);
-    stack_push(if_, argv, count);
-    // printf("close error?\n");
 
-    // printf("push ok rsp %llx\n", if_->rsp);
+    stack_push(if_, argv, count);
+
     success = true;
 
 done:
@@ -562,11 +561,9 @@ void stack_push(struct intr_frame *if_, char **argv, int argc)
         memcpy(if_->rsp, argv[i], (size + 1));
         addr[i] = if_->rsp;
     }
-    // printf("rrrsp %llx\n", if_->rsp);
     while (if_->rsp % 8 != 0)
     {
         if_->rsp--;
-        // printf("rrrsp /%llx\n", if_->rsp);
         *(uint8_t *)if_->rsp = 0;
     }
 
@@ -579,13 +576,11 @@ void stack_push(struct intr_frame *if_, char **argv, int argc)
             memcpy(if_->rsp, &addr[i], sizeof(char **));
     }
 
-    // printf("rrrsp %llx\n", if_->rsp);
     if_->R.rdi = argc;
     if_->R.rsi = if_->rsp;
 
     if_->rsp = if_->rsp - 8;
     memset(if_->rsp, 0, sizeof(void *));
-    // printf("rrrsp %llx\n", if_->rsp);
 
     // hex_dump(if_->rsp, if_->rsp, USER_STACK - if_->rsp, true);
 }
