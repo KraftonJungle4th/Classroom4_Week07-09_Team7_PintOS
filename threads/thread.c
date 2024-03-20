@@ -97,6 +97,7 @@ static struct list thread_list;
 #define TOINT(x) (x >= 0) ? ((x + ((1 << FIXED) >> 1)) >> FIXED) : ((x - ((1 << FIXED) >> 1)) >> FIXED)
 #define TOINT_ZERO(x) ((x) >> FIXED)
 #define TOFIX(x) (x << FIXED)
+#define FDT_PAGES 2
 
 static void kernel_thread(thread_func *, void *aux);
 
@@ -343,6 +344,11 @@ tid_t thread_create(const char *name, int priority,
     t->tf.cs = SEL_KCSEG;
     t->tf.eflags = FLAG_IF;
 
+    for (int i = 0; i < 128; i++)
+    {
+        thread_current()->fdt[i] = NULL;
+    }
+
     /* Add to run queue.
        실행 큐에 추가 */
     thread_unblock(t);
@@ -538,9 +544,16 @@ void thread_yield(void)
         // list_push_back(&ready_list, &curr->elem);
         list_insert_ordered(&ready_list, &curr->elem, priority, NULL);
     }
-
     do_schedule(THREAD_READY);
     intr_set_level(old_level);
+}
+
+void thread_try_yield(void)
+{
+    if (!intr_context() && !list_empty(&ready_list) && thread_current() != idle_thread)
+    {
+        thread_yield();
+    }
 }
 
 /* Sets the current thread's priority to NEW_PRIORITY.
@@ -786,6 +799,8 @@ init_thread(struct thread *t, const char *name, int priority)
     list_init(&t->donations);
     t->nice = 0;
     t->recent_cpu = 0;
+    t->exit_status = 0;
+    t->next_fd = 2;
 
     if (strcmp(name, "idle"))
         list_push_back(&thread_list, &t->th_elem);
