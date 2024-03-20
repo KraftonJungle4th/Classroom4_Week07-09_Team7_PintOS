@@ -31,6 +31,9 @@ void syscall_handler(struct intr_frame *);
 #define MSR_LSTAR 0xc0000082        /* Long mode SYSCALL target */
 #define MSR_SYSCALL_MASK 0xc0000084 /* Mask for the eflags */
 
+// static struct lock read_lock;
+// static struct lock write_lock;
+// static struct lock open_lock;
 static struct lock file_lock;
 
 void syscall_init(void)
@@ -45,6 +48,9 @@ void syscall_init(void)
     write_msr(MSR_SYSCALL_MASK,
               FLAG_IF | FLAG_TF | FLAG_DF | FLAG_IOPL | FLAG_AC | FLAG_NT);
 
+    // lock_init(&read_lock);
+    // lock_init(&write_lock);
+    // lock_init(&open_lock);
     lock_init(&file_lock);
 }
 
@@ -60,7 +66,6 @@ void syscall_handler(struct intr_frame *f) // UNUSED)
     switch (call_num)
     {
     case SYS_HALT:
-        // printf("halt\n");
         halt();
         break;
     case SYS_EXIT:
@@ -179,21 +184,20 @@ int open(const char *file)
     struct file **table = t->fd_table;
     struct file *open_file = NULL;
     int fd = 2;
-    lock_acquire(&file_lock);
 
     open_file = filesys_open(file);
 
     if (open_file == NULL)
     {
-        lock_release(&file_lock);
         return -1;
     }
+
+    // lock_acquire(&open_lock);
 
     while (fd < 128)
     {
         if (table[fd] == NULL)
         {
-            // printf("open fd %d\n", fd);
             break;
         }
         fd++;
@@ -202,7 +206,7 @@ int open(const char *file)
         return -1;
 
     table[fd] = open_file;
-    lock_release(&file_lock);
+    // lock_release(&open_lock);
     return fd;
 }
 
@@ -236,14 +240,18 @@ int read(int fd, void *buffer, unsigned size)
     if (table[fd] == NULL)
         return -1;
 
+    lock_acquire(&file_lock);
     if (fd == 0)
     {
         ret = input_getc();
+        lock_release(&file_lock);
     }
     else
     {
         open_file = table[fd];
+
         ret = file_read(open_file, buffer, size);
+        lock_release(&file_lock);
     }
 
     return ret;
@@ -269,13 +277,14 @@ int write(int fd, const void *buffer, unsigned size)
     }
     else
     {
-        lock_acquire(&file_lock);
+
         if (table[fd] != NULL)
         {
             write_file = table[fd];
+            lock_acquire(&file_lock);
             write_size = file_write_at(write_file, buffer, size, 0);
+            lock_release(&file_lock);
         }
-        lock_release(&file_lock);
     }
 
     return write_size;
@@ -326,14 +335,12 @@ void close(int fd)
     if (fd == 1 || fd == 0 || fd > 128)
         exit(-1); // return;
 
-    // for(struct list_elem e = list_begin(&table); e != list_tail(&table); e = list_next(e)){
-    //     struct fd _fd = list_entry(e, struct fd, fd_elem);
-
-    // }
+    // lock_acquire(&file_lock);
     if (table[fd] != NULL)
     {
         open_file = table[fd];
         table[fd] = NULL;
         file_close(open_file);
     }
+    // lock_release(&file_lock);
 }

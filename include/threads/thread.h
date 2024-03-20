@@ -134,6 +134,7 @@ struct thread
     // struct list fd_table;
 
     struct thread *parent;
+    struct file *running;
     int exit_status;
 
     struct semaphore fork_wait; // fork 복사되기 기다리기
