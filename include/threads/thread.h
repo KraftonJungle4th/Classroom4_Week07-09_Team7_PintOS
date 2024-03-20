@@ -8,6 +8,9 @@
 #ifdef VM
 #include "vm/vm.h"
 #endif
+#ifdef USERPROG
+#include "threads/synch.h"
+#endif
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -16,6 +19,13 @@ enum thread_status
     THREAD_READY,   /* Not running but ready to run. */
     THREAD_BLOCKED, /* Waiting for an event to trigger. */
     THREAD_DYING,   /* About to be destroyed. */
+};
+
+struct fd
+{
+    struct file *file;
+    struct list_elem fd_elem;
+    int fd;
 };
 
 /* Thread identifier type.
@@ -115,6 +125,21 @@ struct thread
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint64_t *pml4; /* Page map level 4 */
+    struct intr_frame user_if;
+    struct list_elem ch_elem; // child
+    struct list child_list;
+
+    // struct file *fd_table[64];
+    struct file **fd_table;
+    // struct list fd_table;
+
+    struct thread *parent;
+    struct file *running;
+    int exit_status;
+
+    struct semaphore fork_wait; // fork 복사되기 기다리기
+    struct semaphore load_wait; // 로딩 기다리기
+    struct semaphore exit_wait; // 끝나기를 기다리기
 
 #endif
 #ifdef VM
@@ -151,6 +176,7 @@ const char *thread_name(void);
 
 void thread_exit(void) NO_RETURN;
 void thread_yield(void);
+void thread_try_yield(void);
 
 int thread_get_priority(void);
 void thread_set_priority(int);
@@ -176,5 +202,7 @@ bool priority(const struct list_elem *a, const struct list_elem *b, void *aux);
 bool d_elem_priority(const struct list_elem *a, const struct list_elem *b, void *aux);
 
 void thread_preempt(void);
+
+struct list ret_thread_list(void);
 
 #endif /* threads/thread.h */
