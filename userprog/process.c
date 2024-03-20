@@ -281,20 +281,6 @@ void process_activate(struct thread *next)
     tss_update(next);
 }
 
-int process_add_file(struct file *f)
-{
-    struct thread *t = thread_current();
-    for (int i = 2; i < 128; i++)
-    {
-        if (t->fdt[i] == NULL)
-        {
-            t->fdt[i] = f;
-            return i;
-        }
-        return -1;
-    }
-}
-
 /* We load ELF binaries.  The following definitions are taken
  * from the ELF specification, [ELF1], more-or-less verbatim.  */
 
@@ -516,6 +502,36 @@ void push_stack(struct intr_frame *intr_f, char **argv, int argc)
 
     intr_f->R.rdi = argc;
     intr_f->R.rsi = intr_f->rsp + 8;
+}
+
+int process_add_file(struct file *f)
+{
+    struct thread *t = thread_current();
+    for (int i = 2; i < 128; i++)
+    {
+        if (t->fdt[i] == NULL)
+        {
+            t->fdt[i] = f;
+            return i;
+        }
+    }
+    return -1;
+}
+
+int process_get_file(int fd)
+{
+    struct thread *t = thread_current();
+    if (t->fdt[fd] == NULL)
+    {
+        return -1;
+    }
+    return fd;
+}
+
+void process_close_file(int fd)
+{
+    struct thread *curr = thread_current();
+    curr->fdt[fd] = NULL;
 }
 
 /* Checks whether PHDR describes a valid, loadable segment in
