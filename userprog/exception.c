@@ -155,29 +155,15 @@ page_fault(struct intr_frame *f)
     /* Count page faults. */
     page_fault_cnt++;
 
+    exit(-1);
+
     /* If the fault is true fault, show info and exit. */
     printf("Page fault at %p: %s error %s page in %s context.\n",
            fault_addr,
            not_present ? "not present" : "rights violation",
            write ? "writing" : "reading",
            user ? "user" : "kernel");
-
-    // if (user)
-    // { // 유저모드면
-    //     printf("useruseruser\n\n");
-    //     kill(f);
-    // }
-    // else
-    // { // 커널모드면
-    //     printf("kernelkernel\n");
-
-    //     printf("fault addr %x\n\n", fault_addr);
-
-    //     // t = thread_current();
-    //     f->rip = f->R.rax;
-    //     f->R.rax = -1;
-    // }
+    printf("page fault tid %d parent %d\n", thread_current()->tid, thread_current()->parent->tid);
 
     // kill(f);
-    exit(-1);
 }

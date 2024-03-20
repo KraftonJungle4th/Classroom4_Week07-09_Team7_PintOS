@@ -124,8 +124,6 @@ void halt(void)
 
 void exit(int status)
 {
-    // printf("eeee %s: exit(%d)\n", thread_current()->name, status);
-
     thread_current()->exit_status = status;
     printf("%s: exit(%d)\n", thread_current()->name, thread_current()->exit_status);
     thread_exit();
@@ -134,17 +132,6 @@ void exit(int status)
 pid_t fork(const char *thread_name, struct intr_frame *if_)
 {
     pid_t pid = 0;
-    // struct thread *curr = thread_current();
-
-    // curr->user_if.R.rbx = curr->tf.R.rbx;
-    // curr->user_if.rsp = curr->tf.rsp;
-    // curr->user_if.R.rbp = curr->tf.R.rbp;
-    // curr->user_if.R.r12 = curr->tf.R.r12;
-    // curr->user_if.R.r13 = curr->tf.R.r13;
-    // curr->user_if.R.r14 = curr->tf.R.r14;
-    // curr->user_if.R.r15 = curr->tf.R.r15;
-    // printf("rsp %llx \n", if_->rsp);
-    // printf("sys fork tid %d\n", curr->tid);
 
     pid = process_fork(thread_name, if_); // 자식 프로세스의 pid를 반환
 
@@ -153,7 +140,6 @@ pid_t fork(const char *thread_name, struct intr_frame *if_)
 
 int exec(const char *cmd_line)
 {
-    // return process_create_initd(cmd_line);
     check_addr(cmd_line);
 
     char *name;
@@ -161,7 +147,6 @@ int exec(const char *cmd_line)
     if (name == NULL)
         exit(-1);
     strlcpy(name, cmd_line, PGSIZE);
-    // printf("input %s\n", name);
 
     if (process_exec(name) == -1)
         return -1;
@@ -193,8 +178,7 @@ int open(const char *file)
     struct thread *t = thread_current();
     struct file **table = t->fd_table;
     struct file *open_file = NULL;
-    int index = -1;
-
+    int fd = 2;
     lock_acquire(&file_lock);
 
     open_file = filesys_open(file);
@@ -202,20 +186,24 @@ int open(const char *file)
     if (open_file == NULL)
     {
         lock_release(&file_lock);
-        return index;
+        return -1;
     }
 
-    for (int i = 2; i < 64; i++)
+    while (fd < 128)
     {
-        if (table[i] == NULL)
+        if (table[fd] == NULL)
         {
-            index = i;
-            table[i] = open_file;
+            // printf("open fd %d\n", fd);
             break;
         }
+        fd++;
     }
+    if (fd >= 128)
+        return -1;
+
+    table[fd] = open_file;
     lock_release(&file_lock);
-    return index;
+    return fd;
 }
 
 int filesize(int fd)
@@ -243,7 +231,7 @@ int read(int fd, void *buffer, unsigned size)
 
     check_addr(buffer);
 
-    if (fd > 64 || fd < 0)
+    if (fd > 128 || fd < 0)
         return -1;
     if (table[fd] == NULL)
         return -1;
@@ -270,7 +258,7 @@ int write(int fd, const void *buffer, unsigned size)
 
     check_addr(buffer);
 
-    if (fd < 0 || fd > 64)
+    if (fd < 0 || fd > 128)
     {
         return -1;
     }
@@ -299,7 +287,7 @@ void seek(int fd, unsigned position)
     struct file **table = t->fd_table;
     struct file *open_file;
 
-    if (fd < 0 || fd > 64)
+    if (fd < 0 || fd > 128)
         exit(-1); // return;
 
     if (table[fd] != NULL)
@@ -318,7 +306,7 @@ unsigned tell(int fd)
     struct file **table = t->fd_table;
     struct file *open_file;
 
-    if (fd < 0 || fd > 64)
+    if (fd < 0 || fd > 128)
         return -1;
 
     if (table[fd] != NULL)
@@ -335,7 +323,7 @@ void close(int fd)
     struct file **table = t->fd_table;
     struct file *open_file;
 
-    if (fd == 1 || fd == 0 || fd > 64)
+    if (fd == 1 || fd == 0 || fd > 128)
         exit(-1); // return;
 
     // for(struct list_elem e = list_begin(&table); e != list_tail(&table); e = list_next(e)){
