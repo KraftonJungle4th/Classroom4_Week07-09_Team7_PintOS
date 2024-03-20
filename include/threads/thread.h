@@ -129,7 +129,8 @@ struct thread
     struct list_elem ch_elem; // child
     struct list child_list;
 
-    struct file *fd_table[64];
+    // struct file *fd_table[64];
+    struct file **fd_table;
     // struct list fd_table;
 
     struct thread *parent;
